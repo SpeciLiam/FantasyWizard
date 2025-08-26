@@ -1,6 +1,11 @@
 package com.sleeper.advisor.web;
 
 import com.sleeper.advisor.service.SleeperClient;
+import com.sleeper.advisor.model.Player;
+import com.sleeper.advisor.model.DraftPick;
+import com.sleeper.advisor.model.Roster;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -10,6 +15,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/league")
 public class RosterController {
 
+    private static final Logger log = LoggerFactory.getLogger(RosterController.class);
+
     private final SleeperClient sleeperClient;
 
     public RosterController(SleeperClient sleeperClient) {
@@ -17,13 +24,15 @@ public class RosterController {
     }
 
     @GetMapping("/{leagueId}/roster/{userId}")
-    public Map<String, Object> getRoster(
+    public Roster getRoster(
             @PathVariable String leagueId,
             @PathVariable String userId,
             @RequestParam(required = false, defaultValue = "1") String weekStr) {
 
         int week = 1;
         try { week = Integer.parseInt(weekStr); } catch (NumberFormatException ignored) {}
+
+        log.info("GET /api/league/{}/roster/{}?week={}", leagueId, userId, week);
 
         // Fetch rosters and players map from Sleeper
         List<Map<String, Object>> rosters = (List<Map<String, Object>>) sleeperClient.getLeagueRosters(leagueId);
@@ -40,48 +49,47 @@ public class RosterController {
                 .stream().filter(pid -> startersIds == null || !startersIds.contains(pid)).collect(Collectors.toList()) : Collections.emptyList();
         List<String> taxiIds = userRoster.get("taxi") instanceof List ? (List<String>) userRoster.get("taxi") : Collections.emptyList();
 
-        List<Map<String, Object>> starters = mapPlayers(startersIds, playersMap);
-        List<Map<String, Object>> bench = mapPlayers(benchIds, playersMap);
-        List<Map<String, Object>> taxi = mapPlayers(taxiIds, playersMap);
+        List<Player> starters = mapPlayers(startersIds, playersMap);
+        List<Player> bench = mapPlayers(benchIds, playersMap);
+        List<Player> taxi = mapPlayers(taxiIds, playersMap);
 
         // Fetch picks
         List<Map<String, Object>> picksRaw = (List<Map<String, Object>>) sleeperClient.getTradedPicks(leagueId);
-        List<Map<String, Object>> picks = picksRaw.stream()
+        List<DraftPick> picks = picksRaw.stream()
                 .filter(pick -> Objects.equals(pick.get("owner_id"), userId))
-                .map(pick -> {
-                    Map<String, Object> mapped = new HashMap<>();
-                    mapped.put("season", pick.get("season"));
-                    mapped.put("round", pick.get("round"));
-                    mapped.put("originalOwner", pick.get("previous_owner_id"));
-                    mapped.put("owner", pick.get("owner_id"));
-                    mapped.put("traded", pick.get("roster_id") != null); // crude "traded" marker
-                    return mapped;
-                })
+                .map(pick -> new DraftPick(
+                        pick.get("season") != null ? Integer.parseInt(pick.get("season").toString()) : 0,
+                        pick.get("round") != null ? Integer.parseInt(pick.get("round").toString()) : 0,
+                        pick.get("previous_owner_id") == null ? null : pick.get("previous_owner_id").toString(),
+                        pick.get("owner_id") == null ? null : pick.get("owner_id").toString(),
+                        pick.get("roster_id") != null
+                ))
                 .collect(Collectors.toList());
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("starters", starters);
-        response.put("bench", bench);
-        response.put("taxi", taxi);
-        response.put("picks", picks);
-
-        return response;
+        return new Roster(starters, bench, taxi, picks);
     }
 
-    private List<Map<String, Object>> mapPlayers(List<String> ids, Map<String, Object> playersMap) {
+    private List<Player> mapPlayers(List<String> ids, Map<String, Object> playersMap) {
         if (ids == null) return Collections.emptyList();
         return ids.stream()
                 .map(pid -> {
                     Map<String, Object> player = (Map<String, Object>) playersMap.get(pid);
                     if (player == null) return null;
-                    Map<String, Object> mapped = new HashMap<>();
-                    mapped.put("id", pid);
-                    mapped.put("name", player.getOrDefault("full_name", ""));
-                    mapped.put("pos", player.getOrDefault("position", ""));
-                    mapped.put("team", player.getOrDefault("team", ""));
-                    mapped.put("proj", player.getOrDefault("fantasy_points", null)); // This field may not be present
-                    mapped.put("value", player.getOrDefault("value", null)); // Not present, for compatibility
-                    return mapped;
+                    String id = pid;
+                    String name = player.getOrDefault("full_name", "").toString();
+                    String pos = player.getOrDefault("position", "").toString();
+                    String team = player.getOrDefault("team", "").toString();
+                    Double proj = null;
+                    if (player.get("fantasy_points") instanceof Number) proj = ((Number) player.get("fantasy_points")).doubleValue();
+                    else if (player.get("fantasy_points") != null) {
+                        try { proj = Double.parseDouble(player.get("fantasy_points").toString()); } catch (Exception ignored) {}
+                    }
+                    Double value = null;
+                    if (player.get("value") instanceof Number) value = ((Number) player.get("value")).doubleValue();
+                    else if (player.get("value") != null) {
+                        try { value = Double.parseDouble(player.get("value").toString()); } catch (Exception ignored) {}
+                    }
+                    return new Player(id, name, pos, team, proj, value);
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());

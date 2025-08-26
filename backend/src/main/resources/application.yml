@@ -1,2 +1,18 @@
-server:
+server:logging:
+  level:
+    root: INFO
+    com.sleeper.advisor: DEBUG
+
   port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+info:
+  app:
+    name: Sleeper League Advisor Backend
+    version: 0.1.0
+    description: Backend API proxy for Sleeper data
