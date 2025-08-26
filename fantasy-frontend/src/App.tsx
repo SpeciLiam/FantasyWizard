@@ -8,7 +8,13 @@ import {
   fetchRoster,
   fetchMatchups
 } from "./api";
-import { getLeagueUsers, avatarUrlFromId } from "./sleeper";
+import {
+  getLeagueUsers,
+  getRosters,
+  getWeekMatchups,
+  buildMatchupPairs,
+  getSleeperPlayersDict
+} from "./sleeper";
 
 export type LeagueUser = {
   userId: string;
@@ -21,12 +27,11 @@ export type LeagueUser = {
 type MatchupSide = {
   userId: string;           // Sleeper user_id for that side
   projectedTotal?: number;  // optional, if you calculate this
-  starters?: Player[];      // optional: use if you render player rows
+  starters?: Player[];      // now provided for each side! hydrate as array in rendering
 };
 
-type Matchup = {
+type MatchupPair = {
   id: string;
-  week: number;
   home: MatchupSide;
   away: MatchupSide;
 };
@@ -139,7 +144,7 @@ export default function App() {
         const mapped: LeagueUser[] = apiUsers.map(u => ({
           userId: u.user_id,
           displayName: u.display_name,
-          avatarUrl: avatarUrlFromId(u.avatar),
+          avatarUrl: u.avatar ? `https://sleepercdn.com/avatars/thumbs/${u.avatar}` : undefined,
           isMe: false
         }));
         setUsers(mapped);
@@ -171,47 +176,103 @@ export default function App() {
   const nameOf = (uid?: string) =>
     users.find((u) => u.userId === uid)?.displayName ?? "—";
 
-  // --- Matchups state: always from the backend/API, never mock data ---
-  const [matchups, setMatchups] = useState<Matchup[]>([]);
+    // --- Matchups state with direct Sleeper join ---
+  const [pairs, setPairs] = useState<MatchupPair[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  // Fetch matchups for current league & week
+  // Load matchups+rosters+player info on leagueId/week, then build matchup pairs with player cards & projected scores
   useEffect(() => {
-    if (!leagueId || !week) {
-      setMatchups([]);
-      return;
-    }
-    fetchMatchups(leagueId, week)
-      .then((resp: MatchupsResponse) => {
-        // Convert to legacy Matchup[] shape if needed (for now, pass through pair format).
-        if (Array.isArray(resp.pairs)) {
-          setMatchups(
-            resp.pairs.map((pair, i) => ({
-              id: `${pair.home.userId}_${pair.away.userId}_w${week}`,
-              week: week,
-              home: pair.home,
-              away: pair.away,
-            }))
-          );
-        } else {
-          setMatchups([]);
+    let ok = true;
+    (async () => {
+      if (!leagueId || !week) return;
+      setLoading(true); setErr(null);
+      try {
+        const [rows, rosters, playerDict] = await Promise.all([
+          getWeekMatchups(leagueId, week),
+          getRosters(leagueId),
+          getSleeperPlayersDict(),
+        ]);
+
+        // Build up a map from roster_id to their starters as Player[]
+        const startersMap = new Map<number, Player[]>();
+        for (const roster of rosters) {
+          let starters: Player[] = [];
+          // Find this roster in the matchup rows for this week for a possible starters list
+          const row = rows.find((r: any) => r.roster_id === roster.roster_id);
+          if (row?.starters && Array.isArray(row.starters)) {
+            starters = row.starters.map((pid: string) => {
+              const info = playerDict?.[pid];
+              return info
+                ? {
+                    id: pid,
+                    name: info.full_name ?? pid,
+                    pos: info.position ?? "",
+                    team: info.team ?? "",
+                    // will default to undefined, since playerDict has no projections
+                    proj: undefined,
+                    value: undefined
+                  }
+                : { id: pid, name: pid, pos: "", team: "", proj: undefined, value: undefined };
+            });
+          }
+          startersMap.set(roster.roster_id, starters);
         }
-      })
-      .catch(() => setMatchups([]));
+
+        // Build matchups with full Player[] and correct projected total for each side
+        const rawPairs = buildMatchupPairs(rows, rosters);
+        const pairsWithPlayers: MatchupPair[] = rawPairs.map(pair => {
+          // Find roster id for each user
+          const getRosterForUserId = (userId: string) =>
+            rosters.find((r: any) => r.owner_id === userId)?.roster_id;
+          const homeRoster = getRosterForUserId(pair.home.userId);
+          const awayRoster = getRosterForUserId(pair.away.userId);
+          const homeStarters = homeRoster ? startersMap.get(homeRoster) ?? [] : [];
+          const awayStarters = awayRoster ? startersMap.get(awayRoster) ?? [] : [];
+
+          // Calculate correct projected total for each side
+          const sumProj = (players: Player[]) =>
+            players.reduce((sum, p) => sum + (typeof p.proj === "number" ? p.proj : 0), 0);
+
+          return {
+            ...pair,
+            home: {
+              ...pair.home,
+              starters: homeStarters,
+              projectedTotal: sumProj(homeStarters)
+            },
+            away: {
+              ...pair.away,
+              starters: awayStarters,
+              projectedTotal: sumProj(awayStarters)
+            }
+          };
+        });
+
+        if (!ok) return;
+        setPairs(pairsWithPlayers);
+      } catch (e: any) {
+        if (!ok) return;
+        setErr(e?.message ?? "Failed to load matchups");
+      } finally {
+        if (!ok) return;
+        setLoading(false);
+      }
+    })();
+    return () => { ok = false; };
   }, [leagueId, week]);
 
-  // Reorder: selected user's game first
-  const orderedMatchups = React.useMemo(() => {
-    if (!selectedUser) return matchups;
+  // Reorder so the selected member’s matchup is first
+  const orderedPairs = useMemo(() => {
+    if (!selectedUser) return pairs;
     const me = selectedUser.userId;
-    const meFirst = [...matchups].sort((a, b) => {
-      const aHas = a.home.userId === me || a.away.userId === me;
-      const bHas = b.home.userId === me || b.away.userId === me;
-      if (aHas && !bHas) return -1;
-      if (!aHas && bHas) return 1;
-      return 0;
-    });
-    return meFirst;
-  }, [matchups, selectedUser]);
+    const idx = pairs.findIndex(p => p.home.userId === me || p.away.userId === me);
+    if (idx <= 0) return pairs; // already first or not found
+    const arr = pairs.slice();
+    const [hit] = arr.splice(idx, 1);
+    arr.unshift(hit);
+    return arr;
+  }, [pairs, selectedUser]);
 
   // Chat send (still placeholder)
   const sendChat = () => {
@@ -369,67 +430,188 @@ export default function App() {
             {tab === "matchups" && (
               <div className="card">
                 <div className="title">Week {week} Matchups</div>
-                {orderedMatchups.length === 0 && (
-                  <div className="small">No matchups for this week.</div>
-                )}
-                {orderedMatchups.map((m) => {
-                  const me = selectedUser?.userId;
-                  const isMine = m.home.userId === me || m.away.userId === me;
-                  return (
-                    <div
-                      key={m.id}
-                      className="card"
-                      style={{
-                        border: isMine ? "2px solid var(--accent)" : "1px solid var(--border)",
-                        borderRadius: 12,
-                        padding: 8,
-                        background: "transparent",
-                        marginBottom: "12px"
-                      }}
-                    >
-                      <div
-                        className="row"
-                        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
-                      >
-                        <div>
-                          <div className="small" style={{ marginBottom: 4 }}>
-                            Home — <strong>{nameOf(m.home.userId)}</strong>
-                          </div>
-                          <div className="small">
-                            Projected Total: {m.home.projectedTotal?.toFixed(1) ?? "—"}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div className="small" style={{ marginBottom: 4 }}>
-                            Away — <strong>{nameOf(m.away.userId)}</strong>
-                          </div>
-                          <div className="small">
-                            Projected Total: {m.away.projectedTotal?.toFixed(1) ?? "—"}
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: 8,
-                          marginTop: 8,
-                        }}
-                      >
-                        <div>
-                          {(m.home.starters ?? []).map((p, i) => (
-                            <PlayerRow key={p.id ?? i} p={p} />
-                          ))}
-                        </div>
-                        <div>
-                          {(m.away.starters ?? []).map((p, i) => (
-                            <PlayerRow key={p.id ?? i} p={p} />
-                          ))}
-                        </div>
-                      </div>
+{orderedPairs.length === 0 && (
+  <div className="small">No matchups for this week.</div>
+)}
+{orderedPairs.map((m: MatchupPair, idx: number) => {
+  const selectedId = selectedUser?.userId;
+  const isSelectedMatchup = m.home.userId === selectedId || m.away.userId === selectedId;
+
+  return (
+    <div
+      key={m.id}
+      className="card"
+      style={{
+        border: isSelectedMatchup && idx === 0
+          ? "2.5px solid var(--accent)"
+          : "1px solid var(--border)",
+        borderRadius: 12,
+        padding: 8,
+        background: "transparent",
+        marginBottom: "12px",
+        boxShadow: isSelectedMatchup && idx === 0
+          ? "0 0 0 2px var(--accent-light)" : undefined
+      }}
+    >
+      {idx === 0 && isSelectedMatchup && (
+        <div className="small" style={{ color: "var(--accent)", fontWeight: 600, marginBottom: 2 }}>
+          Selected member matchup
+        </div>
+      )}
+      <div className="row"
+           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {/* Home side */}
+        <div>
+          <div style={{ fontWeight: 600, color: "#1454a3", fontSize: 12 }}>
+            Home ({nameOf(m.home.userId)})
+          </div>
+          <div className="small">
+            Projected:{" "}
+            <span style={{ fontWeight: 700, color: "#008328" }}>
+              {m.home.projectedTotal?.toFixed(1) ?? "—"}
+            </span>
+          </div>
+        </div>
+        {/* Away side */}
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontWeight: 600, color: "#cf2a27", fontSize: 12 }}>
+            Away ({nameOf(m.away.userId)})
+          </div>
+          <div className="small">
+            Projected:{" "}
+            <span style={{ fontWeight: 700, color: "#008328" }}>
+              {m.away.projectedTotal?.toFixed(1) ?? "—"}
+            </span>
+          </div>
+        </div>
+      </div>
+      {(() => {
+        const homeStarters = m.home.starters ?? [];
+        const awayStarters = m.away.starters ?? [];
+        const maxCount = Math.max(homeStarters.length, awayStarters.length);
+
+        // helper: pad array to max with nulls (for ghost slots)
+        const padArr = (arr: any[], n: number) =>
+          [...arr, ...Array(n - arr.length).fill(null)];
+
+        // compute additive subtotal for each card
+        const addSums = (players: Player[]) => {
+          let sum = 0;
+          return players.map((p: Player | null) => {
+            if (p && typeof p.proj === "number") sum += p.proj;
+            return { player: p, subtotal: p ? sum : null };
+          });
+        };
+
+        const homeAdds = addSums(padArr(homeStarters, maxCount));
+        const awayAdds = addSums(padArr(awayStarters, maxCount));
+
+        return (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              marginTop: 12,
+              alignItems: "stretch",
+            }}
+          >
+            {/* Home starters */}
+            <div className="player-col" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {homeAdds.map(({ player, subtotal }, i: number) =>
+                player ? (
+                  <div className="row" key={player.id ?? i} style={{ minHeight: 54, background: "#191a21" }}>
+                    <div>
+                      <span className="pos" style={{ fontWeight: 600 }}>{player.pos}</span>{" "}
+                      <strong>{player.name}</strong> {player.team && <span className="small">• {player.team}</span>}
+                      {typeof player.value === "number" && (
+                        <span
+                          style={{
+                            background: "#222b38",
+                            color: "#74d7ff",
+                            marginLeft: 10,
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 9,
+                            fontWeight: 700,
+                          }}
+                        >
+                          value: {player.value.toFixed(0)}
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontWeight: 700, color: "#22c55e", marginRight: 12 }}>
+                        {typeof player.proj === "number" ? player.proj.toFixed(1) : "—"}
+                      </span>
+                      {subtotal !== null && (
+                        <span className="small" style={{ color: "#888", fontSize: 11 }}>
+                          Σ {subtotal.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="row" key={`ghost${i}`} style={{
+                    minHeight: 54,
+                    opacity: 0.25,
+                    background: "var(--row2)",
+                    borderStyle: "dashed",
+                  }}></div>
+                )
+              )}
+            </div>
+            {/* Away starters */}
+            <div className="player-col" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {awayAdds.map(({ player, subtotal }, i: number) =>
+                player ? (
+                  <div className="row" key={player.id ?? i} style={{ minHeight: 54, background: "#191a21" }}>
+                    <div>
+                      <span className="pos" style={{ fontWeight: 600 }}>{player.pos}</span>{" "}
+                      <strong>{player.name}</strong> {player.team && <span className="small">• {player.team}</span>}
+                      {typeof player.value === "number" && (
+                        <span
+                          style={{
+                            background: "#222b38",
+                            color: "#74d7ff",
+                            marginLeft: 10,
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 9,
+                            fontWeight: 700,
+                          }}
+                        >
+                          value: {player.value.toFixed(0)}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontWeight: 700, color: "#22c55e", marginRight: 12 }}>
+                        {typeof player.proj === "number" ? player.proj.toFixed(1) : "—"}
+                      </span>
+                      {subtotal !== null && (
+                        <span className="small" style={{ color: "#888", fontSize: 11 }}>
+                          Σ {subtotal.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="row" key={`ghost${i}`} style={{
+                    minHeight: 54,
+                    opacity: 0.25,
+                    background: "var(--row2)",
+                    borderStyle: "dashed",
+                  }}></div>
+                )
+              )}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+})}
               </div>
             )}
           </div>
