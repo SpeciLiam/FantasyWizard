@@ -1,37 +1,28 @@
-HELP.md
-.gradle
+# Ignore Gradle build artifacts
 build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
+# Ignore IDE files
+.idea/
 .vscode/
+
+# Ignore Gradle wrapper files (though they might be needed for some setups)
+# gradle/wrapper/gradle-wrapper.jar
+# gradle/wrapper/gradle-wrapper.properties
+
+# Ignore environment files containing secrets
+.env
+
+# Ignore Gradle caches and other Gradle-related files
+.gradle/
+
+# Ignore backend-specific build artifacts
+backend/build/
+backend/gradle/
+
+# Ignore frontend node_modules and build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Ignore other potential build or log files
+*.log
+*.tmp
