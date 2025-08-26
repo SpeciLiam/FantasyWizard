@@ -1,0 +1,20 @@
+{
+  "name": "fantasy-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "esbuild src/main.tsx --bundle --outfile=public/bundle.js --loader:.tsx=tsx --loader:.ts=ts --sourcemap --define:process.env.NODE_ENV=\\\"development\\\" --watch --servedir=public",
+    "build": "esbuild src/main.tsx --bundle --minify --outfile=public/bundle.js --loader:.tsx=tsx --loader:.ts=ts --define:process.env.NODE_ENV=\\\"production\\\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.11",
+    "@types/react-dom": "^19.1.8",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.4"
+  }
+}

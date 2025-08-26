@@ -1,5 +1,11 @@
 package com.sleeper.advisor.web;
 
+import com.sleeper.advisor.service.MatchupService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
 import com.sleeper.advisor.service.SleeperClient;
 import com.sleeper.advisor.model.LeagueUser;
 import org.slf4j.Logger;
@@ -17,9 +23,23 @@ public class LeagueController {
     private static final Logger log = LoggerFactory.getLogger(LeagueController.class);
 
     private final SleeperClient sleeperClient;
+    private final MatchupService matchupService;
 
-    public LeagueController(SleeperClient sleeperClient) {
+    @Autowired
+    public LeagueController(SleeperClient sleeperClient, MatchupService matchupService) {
         this.sleeperClient = sleeperClient;
+        this.matchupService = matchupService;
+    }
+
+    @GetMapping("/{leagueId}/matchups/{week}")
+    public com.sleeper.advisor.model.MatchupsResponse getMatchups(
+            @PathVariable String leagueId,
+            @PathVariable int week
+    ) {
+        log.info("API GET /api/league/{}/matchups/{}", leagueId, week);
+        com.sleeper.advisor.model.MatchupsResponse resp = matchupService.getMatchups(leagueId, week);
+        log.info("Returning matchups: {} pairs", resp.pairs().size());
+        return resp;
     }
 
     @GetMapping("/{leagueId}/members")

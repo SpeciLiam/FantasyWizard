@@ -1,28 +1,75 @@
-# Ignore Gradle build artifacts
-build/
+# Node.js dependencies and outputs (all subprojects)
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/.turbo/
+**/.cache/
+**/.eslintcache
 
-# Ignore IDE files
+# Build artifacts - general and Java/Gradle
+build/
+.gradle/
+.gradle/
+*.class
+
+# Gradle/springboot backend specific
+backend/build/
+backend/.gradle/
+backend/gradle/
+backend/.DS_Store
+backend/logs/
+backend/tmp/
+
+# Gradle wrapper files (optional, often checked in)
+# backend/gradle/wrapper/gradle-wrapper.jar
+# backend/gradle/wrapper/gradle-wrapper.properties
+
+# Frontend outputs (for both 'frontend' and 'fantasy-frontend')
+frontend/dist/
+frontend/node_modules/
+fantasy-frontend/dist/
+fantasy-frontend/node_modules/
+fantasy-frontend/.env.local
+fantasy-frontend/.env
+fantasy-frontend/.DS_Store
+
+# Server
+server/node_modules/
+server/dist/
+server/.env
+server/.DS_Store
+
+# Environment / secrets (ALL .env files)
+.env*
+!.env.example
+
+# OS/Editor/IDE junk
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
+.history
+*.swp
 
-# Ignore Gradle wrapper files (though they might be needed for some setups)
-# gradle/wrapper/gradle-wrapper.jar
-# gradle/wrapper/gradle-wrapper.properties
-
-# Ignore environment files containing secrets
-.env
-
-# Ignore Gradle caches and other Gradle-related files
-.gradle/
-
-# Ignore backend-specific build artifacts
-backend/build/
-backend/gradle/
-
-# Ignore frontend node_modules and build artifacts
-frontend/node_modules/
-frontend/dist/
-
-# Ignore other potential build or log files
+# Logs and temp files
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 *.tmp
+*.temp
+
+# Coverage & test artifacts
+coverage/
+.nyc_output/
+test-report/
+junit-report.xml
+
+# Misc
+!.gitkeep
+
+# Ignore lockfiles if not intended to commit (uncomment if not used)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

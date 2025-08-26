@@ -1,23 +1,20 @@
 # Sleeper League Advisor
 
-_Empowering fantasy football players with insights and instant trade advice powered by a modern full-stack web app._
+_Empowering fantasy football players with insights, real-time matchup views, and instant trade advice using a modern full-stack web app._
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Monorepo Structure](#monorepo-structure)
 - [Stack & Architecture](#stack--architecture)
 - [Quickstart](#quickstart)
-- [Backend Configuration & Environment Variables](#backend-configuration--environment-variables)
-- [Frontend Configuration & Environment Variables](#frontend-configuration--environment-variables)
+- [Configuration & Environment Variables](#configuration--environment-variables)
 - [REST API Reference](#rest-api-reference)
-- [Caching Policy](#caching-policy)
-- [LLM Integration: Setup & Offline Mode](#llm-integration-setup--offline-mode)
 - [Troubleshooting](#troubleshooting)
 - [Useful Scripts & Commands](#useful-scripts--commands)
-- [Architecture & Decisions](#architecture--decisions)
-- [OpenAPI Contract](#openapi-contract)
+- [Decisions & Notes](#decisions--notes)
 - [Security](#security)
 - [License](#license)
 
@@ -25,80 +22,85 @@ _Empowering fantasy football players with insights and instant trade advice powe
 
 ## Overview
 
-**Sleeper League Advisor** is a full-stack fantasy football companion app. It connects to the public [Sleeper API](https://docs.sleeper.app/) and empowers league members with advanced roster views, projected scoring, and instant trade proposal advice. The intuitive three-column UI (members, details, chat/explain) makes it easy to manage your rosters, evaluate moves, and collaborate on trades—with or without AI.
+**Sleeper League Advisor** is a collaborative fantasy football platform that connects to the public [Sleeper API](https://docs.sleeper.app/) to provide advanced roster management, matchup breakdowns, projected scoring, and instant trade suggestions. The UI features a clean three-column layout: league members, weekly/roster details (live matchups), and advisor chat.
+
+---
+
+## Monorepo Structure
+
+```
+/
+├─ backend/           # Spring Boot (Java) REST API, caching, logic
+├─ frontend/          # React + TypeScript Vite app (classic UI)
+├─ fantasy-frontend/  # Alternative/experimental React frontend UI
+├─ server/            # Node.js API proxy/microservices (dev tools, optional)
+├─ shared/            # (Optional, future) Contract/OpenAPI/types
+```
+
+- Both `frontend/` and `fantasy-frontend/` have their own `node_modules`, config, and outputs.
+- All subprojects are covered by a comprehensive `.gitignore`.
 
 ---
 
 ## Stack & Architecture
 
-- **Frontend**:  
-  - React + TypeScript, Vite, TailwindCSS (utility-first styling), framer-motion (animations), lucide-react (icons)
-  - Core layout: left (members), center (roster, picks, trade ideas), right (chat/explain)
-- **Backend**:  
-  - Java 17, Spring Boot 3 (MVC, actuation via /actuator), blocking RestTemplate for API calls
-  - Caffeine + Spring Cache for data caching (players, leagues, etc.)
-  - Deterministic `ProjectionStore` for stub projections; `TradeEngine` for fair trade suggestions
-  - Secured CORS (API serves at http://localhost:8080, UI at http://localhost:5173)
-- **Data Source**:  
-  - Direct integration with Sleeper’s public read-only API endpoints (see [API Reference](#rest-api-reference))
-- **LLM Integration (optional)**:  
-  - Hugging Face Inference API _or_ local Ollama, for natural-language explanations/trade ideas (works offline or with LLM disabled)
-- **Monorepo**:  
-  - `/backend` (Java service), `/frontend` (React app)
+- **Frontend**: React + TypeScript (Vite), TailwindCSS, Framer Motion
+  - UI features a member list, matchup details pane (shows ALL weekly matchups, fully API-driven), advisor chat.
+  - The main fantasy football app is in `/fantasy-frontend`; `/frontend` is legacy/minimal or for alternate demos.
+- **Backend**: Spring Boot 3 (Java 17), Caffeine cache, REST API, deterministic projections/trade advice.
+- **Server layer (optional)**: Node.js/TypeScript microservices for API proxy/dev tools.
+- **Live Data**: All matchup screens pull weekly matchups directly from the backend API; no mock matchup data is used anywhere in the UI.
+- **LLM**: Integration optionally enabled (HuggingFace or local Ollama).
 
 ---
 
 ## Quickstart
 
-### 1. Clone the repository
+### 1. Clone
 
 ```bash
 git clone https://github.com/your-org/sleeper-league-advisor.git
 cd sleeper-league-advisor
 ```
 
-### 2. Run the Backend
+### 2. Start Backend (Spring Boot, Java 17)
 
 ```bash
 cd backend
-./mvnw spring-boot:run
-# or, to build:
-./mvnw -U clean package
+./gradlew bootRun           # Run in development mode OR
+./gradlew build             # Then: java -jar build/libs/*.jar
 ```
 
-### 3. Run the Frontend
+The backend serves at [http://localhost:8080](http://localhost:8080) by default.
+
+### 3. Start Frontend
 
 ```bash
-cd ../frontend
+cd ../fantasy-frontend      # or cd ../frontend for legacy/test UI
 npm ci
 npm run dev
 ```
 
-Visit the app at [http://localhost:5173](http://localhost:5173).
+Open your browser at [http://localhost:5173](http://localhost:5173).
 
 ---
 
-## Backend Configuration & Environment Variables
+## Configuration & Environment Variables
 
-Set up these environment variables as needed (all are optional unless specified):
+### Backend (`backend/`)
 
-- `HF_TOKEN` – Hugging Face API token (for cloud LLM, optional)
-- `HF_MODEL` – Hugging Face model name (optional)
-- `OLLAMA_URL` – Base URL for local Ollama (e.g., `http://localhost:11434`, optional)
-- `OLLAMA_MODEL` – Ollama model name (e.g., `llama3`, optional)
+Create/Edit environment variables or set them in `src/main/resources/application.yml`:
+
+- `HF_TOKEN` – HuggingFace LLM API token (optional)
+- `OLLAMA_URL` – Ollama base URL (for local LLM, optional)
 - `app.cors.origins` – Allowed frontend origins (default: `http://localhost:5173`)
-- `app.cache.playersTtlMinutes` – TTL for player data (default: 1440)
-- `app.cache.leagueTtlMinutes` – TTL for leagues/members (default: 5)
 
-Application config is managed via `backend/src/main/resources/application.yml` or environment variables.
+### Frontend (`fantasy-frontend/`)
 
----
+- `.env.local` or `.env` (not committed):
+  - `VITE_API_BASE=http://localhost:8080`
 
-## Frontend Configuration & Environment Variables
-
-- `VITE_API_BASE` (default: `http://localhost:8080`)
-
-Adjust in your `/frontend/.env` if you proxy/back the API differently.
+_No sensitive keys or API tokens are required for basic usage._
 
 ---
 
@@ -106,169 +108,26 @@ Adjust in your `/frontend/.env` if you proxy/back the API differently.
 
 All backend endpoints are prefixed with `/api`.
 
-### GET `/api/user/{username}/leagues?season=2025`
+- **GET** `/api/user/{username}/leagues?season=2025`
+- **GET** `/api/league/{leagueId}/members`
+- **GET** `/api/league/{leagueId}/roster/{userId}?week=1`
+- **GET** `/api/league/{leagueId}/matchups/{week}`  
+  _Returns all matchups for a week. The UI sorts and highlights the selected member’s matchup._
+- **POST** `/api/explain` (LLM optional)
+- **POST** `/api/trades`, **POST** `/api/generate/trades` (LLM optional)
 
-Returns a list of leagues for a given username.
+See detailed shapes and response samples in [REST API Reference](#rest-api-reference).
 
-**Response:**
-
-```json
-{
-  "leagues": [
-    { "leagueId": "1234", "name": "Cool League" }
-  ]
-}
-```
-
----
-
-### GET `/api/league/{leagueId}/members`
-
-List league members.
-
-**Response:**
-
-```json
-[
-  { "userId": "324", "displayName": "Pat", "avatar": "url", "isMe": false }
-]
-```
-
----
-
-### GET `/api/league/{leagueId}/roster/{userId}?week=1`
-
-Returns a full roster for the user in the given league and week.
-
-**Response:**
-
-```json
-{
-  "starters": [
-    { "id": "p_1", "name": "Player 1", "pos": "QB", "team": "KC", "proj": 17.1, "value": 120 }
-  ],
-  "bench": [
-    { "id": "p_2", "name": "Player 2", "pos": "WR", "team": "MIN", "proj": 11.2, "value": 87 }
-  ],
-  "taxi": [
-    { "id": "p_3", "name": "Rookie 1", "pos": "RB", "team": "CHI", "proj": 7.8, "value": 60 }
-  ],
-  "picks": [
-    { "season": 2025, "round": 1, "originalOwner": "324", "owner": "324", "traded": false }
-  ]
-}
-```
-
----
-
-### POST `/api/explain`
-
-**Body:**
-
-```json
-{ "prompt": "Why is my WR underperforming?", "context": { ... } }
-```
-**Response:**
-
-```json
-{ "answer": "Based on recent box scores..." }
-```
-
-_If no LLM is configured, answer will indicate chat is disabled._
-
----
-
-### POST `/api/trades`
-
-Returns deterministic trade proposals.
-
-**Body:**
-
-```json
-{ "yourTeam": [...], "otherTeam": [...] }
-```
-
-**Response:**
-
-```json
-[
-  { "youSend": [...], "youReceive": [...], "delta": -2.5, "yourGain": 10.2, "reason": "Improves RB depth" }
-]
-```
-
----
-
-### POST `/api/generate/trades` _(optional, with LLM)_
-
-**Response:**
-
-```json
-{
-  "enabled": true,
-  "trades": [
-    { "youSend": [...], "youReceive": [...], "delta": 0.3, "yourGain": 5.7, "reason": "Fair swap" }
-  ]
-}
-```
-
----
-
-## Caching Policy
-
-- **Players**: 24h (Caffeine-based; `playersMap`)
-- **Leagues, members, rosters, etc.**: ~5m (configurable)
-  - See `application.yml` for all cache TTLs.
-
----
-
-## LLM Integration: Setup & Offline Mode
-
-Enable LLM-powered explanations or keep the app fully offline:
-
-### Hugging Face Inference API
-
-1. Get a HF account + token.
-2. Set `HF_TOKEN` and (optionally) `HF_MODEL`.
-3. Start the backend.
-
-### Local Ollama
-
-1. Install [ollama](https://ollama.com/), e.g.:
-   ```bash
-   ollama pull llama3
-   ```
-2. Set environment:
-   ```bash
-   export OLLAMA_URL=http://localhost:11434
-   export OLLAMA_MODEL=llama3
-   ```
-3. Start the backend.
-
-### Offline/No Config
-
-- If no LLM config is set, the API/chat endpoints work and simply return “disabled” messages or stubs.
+All matchups, roster, and member data in the UI is loaded live from these endpoints—no frontend mock data.
 
 ---
 
 ## Troubleshooting
 
-**1. Corporate Maven mirror blocking dependencies**
-
-- If you see missing dependencies, check for company-wide `.mvn/settings.xml` or `~/.m2/settings.xml` overriding central.
-- Comment out custom `<mirror>` and/or `<repository>` sections, or add a project-local `.mvn/settings.xml`.
-
-**2. Java 17 / Spring Boot 3 migration**
-
-- Ensure imports use `jakarta.*` rather than `javax.*`.
-
-**3. CORS Failures**
-
-- Make sure `app.cors.origins` in backend matches your frontend origin (default: `http://localhost:5173`).
-- See browser network console for error details.
-
-**4. Port conflicts (8080/5173)**
-
-- Backend defaults to 8080, frontend to 5173. Either adjust the ports or stop conflicting services.
+- **CORS Issues**: Set `app.cors.origins` in backend config. Default allows `http://localhost:5173`.
+- **Java Version**: Requires Java 17 or later.
+- **Port Conflicts**: Backend default is 8080, frontend is 5173.
+- **Dependency Problems**: Ensure `node_modules` for UI, run `./gradlew` for backend, check `.gitignore` does not include lockfiles if you want reproducible installs.
 
 ---
 
@@ -278,53 +137,41 @@ Enable LLM-powered explanations or keep the app fully offline:
 
 ```bash
 cd backend
-./mvnw spring-boot:run    # Start server
-./mvnw -U clean package   # Build JAR
+./gradlew bootRun          # Development server
+./gradlew build            # Production JAR build
 ```
 
 ### Frontend
 
 ```bash
-cd frontend
+cd fantasy-frontend
 npm ci
 npm run dev
 ```
 
-### Monorepo / Both Together
+### Run Both Together
 
-**With `concurrently` (optional, requires install):**
+_On Unix/macOS:_
+
 ```bash
-npm install -g concurrently
-concurrently "cd backend && ./mvnw spring-boot:run" "cd frontend && npm run dev"
+concurrently "cd backend && ./gradlew bootRun" "cd fantasy-frontend && npm run dev"
 ```
 
 ---
 
-## Architecture & Decisions
+## Decisions & Notes
 
-- **Spring MVC + RestTemplate**: Prioritizes simplicity and compatibility (especially for Caffeine/Spring caching, actuator, and seamless local debugging) over async complexity; WebFlux is overkill for read-only proxies and complicates cache layers.
-- **Deterministic Stub Services**: `ProjectionStore` and `TradeEngine` ensure stable, reproducible UI values and demos even if the live API is flakey or LLMs are disabled.
-- **Monorepo**: Simplifies coordinated deployment and local development. Can be split later (move contracts to `/shared`, split CI scripts, publish OpenAPI file).
-- **LLM Gating**: LLM integration is opt-in; critical user flows and trading features do not require LLM access or tokens.
-
----
-
-## OpenAPI Contract
-
-_If/when provided, the canonical OpenAPI contract will be published at:_
-
-```
-/shared/openapi.yaml
-```
+- All matchups shown in the UI are API-driven and sorted to the top for the selected member.
+- No mock player or matchup data is used in the production UI.
+- Full monorepo best practices: clear `.gitignore`, isolated builds per subproject.
+- LLM chat and trade advice are optional and off by default.
 
 ---
 
 ## Security
 
-- **DO NOT COMMIT SECRETS**.  
-  - Do not store any tokens or credentials in the repo.
-  - Use local `.env` files (_not_ committed) for all secrets.
-  - Application config (tokens, origins) belongs in environment or application.yml.
+- **Never commit secrets**: Use `.env` files locally (all are gitignored except `.env.example`).
+- Frontend does not require any keys by default.
 
 ---
 
