@@ -1,155 +1,180 @@
 package com.sleeper.advisor.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.http.MediaType;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
 
 @Service
 public class SleeperClient {
 
     private static final Logger log = LoggerFactory.getLogger(SleeperClient.class);
 
-    private final WebClient webClient;
+    private final RestTemplate restTemplate = new RestTemplate();
+    private static final String BASE_URL = "https://api.sleeper.app";
 
-    private final Cache<String, Object> playersMapCache;
-    private final Cache<String, Object> userCache;
-    private final Cache<String, Object> leaguesCache;
-    private final Cache<String, Object> membersCache;
-
-    public SleeperClient(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder
-                .baseUrl("https://api.sleeper.app")
-                .defaultHeader("Accept", MediaType.APPLICATION_JSON_VALUE)
-                .build();
-        this.playersMapCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(24)).build();
-        this.userCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).build();
-        this.leaguesCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).build();
-        this.membersCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).build();
-    }
-
-    public Map<String, Object> getUserId(String username) {
-        String cacheKey = "user:" + username;
-        Object cached = userCache.getIfPresent(cacheKey);
-        if (cached != null) return (Map<String, Object>) cached;
-        String endpoint = "/v1/user/" + username;
+    public String getUserId(String username) {
+        String endpoint = BASE_URL + "/v1/user/" + username;
         log.info("GET Sleeper: {}", endpoint);
-        Map<String, Object> user = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
-        if (user != null) {
-            userCache.put(cacheKey, user);
-            log.debug("User response: {}", user.keySet());
-        } else {
-            log.debug("User not found for username={}", username);
+        try {
+            Map<String, Object> resp = restTemplate.getForObject(endpoint, Map.class);
+            if (resp != null && resp.get("user_id") != null) {
+                log.debug("Fetched user map, keys: {}", resp.keySet());
+                return resp.get("user_id").toString();
+            }
+            log.debug("No user found for username={}", username);
+            return null;
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching user: {}", ex.getMessage());
+            throw ex;
         }
-        return user;
     }
 
-    public Object getUserLeagues(String userId, String season) {
-        String cacheKey = "leagues:" + userId + ":" + season;
-        Object cached = leaguesCache.getIfPresent(cacheKey);
-        if (cached != null) return cached;
-        String endpoint = "/v1/user/" + userId + "/leagues/nfl/" + season;
+    @Cacheable(value = "leaguesCache", key = "#userId + '_' + #season")
+    public List<Map<String,Object>> getUserLeagues(String userId, String season) {
+        String endpoint = BASE_URL + "/v1/user/" + userId + "/leagues/nfl/" + season;
         log.info("GET Sleeper: {}", endpoint);
-        Object leagues = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Object.class)
-                .block();
-        leaguesCache.put(cacheKey, leagues);
-        // For known contract, leagues is List
-        if (leagues instanceof java.util.List l) {
-            log.debug("Fetched {} leagues for user {}", l.size(), userId);
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof List<?> list) {
+                List<Map<String,Object>> out = new ArrayList<>();
+                for (Object obj : list) {
+                    if (obj instanceof Map) {
+                        out.add((Map<String,Object>)obj);
+                    }
+                }
+                log.debug("Fetched {} leagues for user {}", out.size(), userId);
+                return out;
+            }
+            log.debug("No leagues found for userId={}", userId);
+            return Collections.emptyList();
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching leagues: {}", ex.getMessage());
+            throw ex;
         }
-        return leagues;
     }
 
-    public Object getLeagueMembers(String leagueId) {
-        String cacheKey = "members:" + leagueId;
-        Object cached = membersCache.getIfPresent(cacheKey);
-        if (cached != null) return cached;
-        String endpoint = "/v1/league/" + leagueId + "/users";
+    @Cacheable(value = "membersCache", key = "#leagueId")
+    public List<Map<String,Object>> getLeagueMembers(String leagueId) {
+        String endpoint = BASE_URL + "/v1/league/" + leagueId + "/users";
         log.info("GET Sleeper: {}", endpoint);
-        Object members = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Object.class)
-                .block();
-        membersCache.put(cacheKey, members);
-        if (members instanceof java.util.List l) {
-            log.debug("Fetched {} league members for league {}", l.size(), leagueId);
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof List<?> list) {
+                List<Map<String,Object>> out = new ArrayList<>();
+                for (Object obj : list) {
+                    if (obj instanceof Map) {
+                        out.add((Map<String,Object>)obj);
+                    }
+                }
+                log.debug("Fetched {} league members for league {}", out.size(), leagueId);
+                return out;
+            }
+            log.debug("No members found for leagueId={}", leagueId);
+            return Collections.emptyList();
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching league members: {}", ex.getMessage());
+            throw ex;
         }
-        return members;
     }
 
-    public Object getLeagueRosters(String leagueId) {
-        String endpoint = "/v1/league/" + leagueId + "/rosters";
+    @Cacheable(value = "rostersCache", key = "#leagueId")
+    public List<Map<String,Object>> getLeagueRosters(String leagueId) {
+        String endpoint = BASE_URL + "/v1/league/" + leagueId + "/rosters";
         log.info("GET Sleeper: {}", endpoint);
-        Object rosters = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Object.class)
-                .block();
-        if (rosters instanceof java.util.List l) {
-            log.debug("Fetched {} rosters for league {}", l.size(), leagueId);
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof List<?> list) {
+                List<Map<String,Object>> out = new ArrayList<>();
+                for (Object obj : list) {
+                    if (obj instanceof Map) {
+                        out.add((Map<String,Object>)obj);
+                    }
+                }
+                log.debug("Fetched {} rosters for league {}", out.size(), leagueId);
+                return out;
+            }
+            log.debug("No rosters found for leagueId={}", leagueId);
+            return Collections.emptyList();
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching league rosters: {}", ex.getMessage());
+            throw ex;
         }
-        return rosters;
     }
 
-    public Object getMatchups(String leagueId, int week) {
-        String endpoint = "/v1/league/" + leagueId + "/matchups/" + week;
+    @Cacheable(value = "matchupsCache", key = "#leagueId + '_' + #week")
+    public List<Map<String,Object>> getMatchups(String leagueId, int week) {
+        String endpoint = BASE_URL + "/v1/league/" + leagueId + "/matchups/" + week;
         log.info("GET Sleeper: {}", endpoint);
-        Object matchups = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Object.class)
-                .block();
-        if (matchups instanceof java.util.List l) {
-            log.debug("Fetched {} matchups for league {} week {}", l.size(), leagueId, week);
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof List<?> list) {
+                List<Map<String,Object>> out = new ArrayList<>();
+                for (Object obj : list) {
+                    if (obj instanceof Map) {
+                        out.add((Map<String,Object>)obj);
+                    }
+                }
+                log.debug("Fetched {} matchups for league {} week {}", out.size(), leagueId, week);
+                return out;
+            }
+            log.debug("No matchups found for leagueId={}, week={}", leagueId, week);
+            return Collections.emptyList();
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching matchups: {}", ex.getMessage());
+            throw ex;
         }
-        return matchups;
     }
 
-    public Object getTradedPicks(String leagueId) {
-        String endpoint = "/v1/league/" + leagueId + "/traded_picks";
+    @Cacheable(value = "tradedPicksCache", key = "#leagueId")
+    public List<Map<String,Object>> getTradedPicks(String leagueId) {
+        String endpoint = BASE_URL + "/v1/league/" + leagueId + "/traded_picks";
         log.info("GET Sleeper: {}", endpoint);
-        Object picks = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Object.class)
-                .block();
-        if (picks instanceof java.util.List l) {
-            log.debug("Fetched {} traded picks for league {}", l.size(), leagueId);
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof List<?> list) {
+                List<Map<String,Object>> out = new ArrayList<>();
+                for (Object obj : list) {
+                    if (obj instanceof Map) {
+                        out.add((Map<String,Object>)obj);
+                    }
+                }
+                log.debug("Fetched {} traded picks for league {}", out.size(), leagueId);
+                return out;
+            }
+            log.debug("No traded picks found for leagueId={}", leagueId);
+            return Collections.emptyList();
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching traded picks: {}", ex.getMessage());
+            throw ex;
         }
-        return picks;
     }
 
-    public Map<String, Object> getPlayersMap() {
-        String cacheKey = "playersMap";
-        Object cached = playersMapCache.getIfPresent(cacheKey);
-        if (cached != null) return (Map<String, Object>) cached;
-        String endpoint = "/v1/players/nfl";
+    @Cacheable(value = "playersMap")
+    public Map<String, Map<String,Object>> getPlayersMap() {
+        String endpoint = BASE_URL + "/v1/players/nfl";
         log.info("GET Sleeper: {}", endpoint);
-        Map<String, Object> players = webClient.get()
-                .uri(endpoint)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
-        playersMapCache.put(cacheKey, players);
-        log.debug("Fetched {} players", players != null ? players.size() : 0);
-        return players;
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof Map<?,?> map) {
+                Map<String, Map<String,Object>> out = new HashMap<>();
+                for (Map.Entry<?,?> entry : map.entrySet()) {
+                    if (entry.getKey() instanceof String && entry.getValue() instanceof Map) {
+                        out.put((String)entry.getKey(), (Map<String,Object>)entry.getValue());
+                    }
+                }
+                log.debug("Fetched {} players", out.size());
+                return out;
+            }
+            log.debug("No players found");
+            return Collections.emptyMap();
+        } catch (HttpClientErrorException ex) {
+            log.error("Error fetching players map: {}", ex.getMessage());
+            throw ex;
+        }
     }
 }

@@ -1,9 +1,9 @@
-server:logging:
-  level:
-    root: INFO
-    com.sleeper.advisor: DEBUG
-
-  port: 8080
+app:
+  cors:
+    origins: http://localhost:5173
+  cache:
+    playersTtlMinutes: 1440
+    leagueTtlMinutes: 5
 
 management:
   endpoints:
@@ -15,4 +15,8 @@ info:
   app:
     name: Sleeper League Advisor Backend
     version: 0.1.0
-    description: Backend API proxy for Sleeper data
+
+logging:
+  level:
+    root: INFO
+    com.sleeper.advisor: DEBUG
