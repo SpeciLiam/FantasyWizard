@@ -29,7 +29,7 @@ class UserControllerTest {
         String username = "testuser";
         String userId = "uid123";
         Mockito.when(sleeperClient.getUserId(username))
-                .thenReturn(Map.of("user_id", userId));
+                .thenReturn(userId);
         Mockito.when(sleeperClient.getUserLeagues(Mockito.eq(userId), Mockito.anyString()))
                 .thenReturn(List.of(
                         Map.of("league_id", "l1", "name", "League 1", "extra", "foo"),

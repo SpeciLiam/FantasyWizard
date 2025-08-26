@@ -28,24 +28,18 @@ public class UserController {
 
         log.info("GET /api/user/{}/leagues?season={}", username, season);
 
-        Map<String, Object> user = sleeperClient.getUserId(username);
-        if (user == null) {
+        String userId = sleeperClient.getUserId(username);
+        if (userId == null) {
             throw new RuntimeException("Sleeper user not found: " + username);
         }
-        String userId = user.get("user_id").toString();
 
-        Object leaguesRaw = sleeperClient.getUserLeagues(userId, season);
+        List<Map<String, Object>> leaguesRaw = sleeperClient.getUserLeagues(userId, season);
         List<Map<String, Object>> leagues = new java.util.ArrayList<>();
-        if (leaguesRaw instanceof List) {
-            for (Object obj : (List<?>) leaguesRaw) {
-                if (obj instanceof Map) {
-                    Map<?,?> league = (Map<?,?>) obj;
-                    Map<String, Object> leagueSummary = new HashMap<>();
-                    leagueSummary.put("leagueId", league.get("league_id"));
-                    leagueSummary.put("name", league.get("name"));
-                    leagues.add(leagueSummary);
-                }
-            }
+        for (Map<String, Object> league : leaguesRaw) {
+            Map<String, Object> leagueSummary = new HashMap<>();
+            leagueSummary.put("leagueId", league.get("league_id"));
+            leagueSummary.put("name", league.get("name"));
+            leagues.add(leagueSummary);
         }
         Map<String, Object> response = new HashMap<>();
         response.put("leagues", leagues);
