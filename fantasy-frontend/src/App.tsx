@@ -519,6 +519,8 @@ export default function App() {
         const homeAdds = addSums(padArr(homeStarters, maxCount));
         const awayAdds = addSums(padArr(awayStarters, maxCount));
 
+        // Build an array so we can render both home/away at the same index per row, 
+        // and compare for points coloring and equal heights.
         return (
           <div
             style={{
@@ -529,96 +531,107 @@ export default function App() {
               alignItems: "stretch",
             }}
           >
-            {/* Home starters */}
-            <div className="player-col" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {homeAdds.map(({ player, subtotal }, i: number) =>
-                player ? (
-                  <div className="row" key={player.id ?? i} style={{ minHeight: 54, background: "#191a21" }}>
-                    <div>
-                      <span className="pos" style={{ fontWeight: 600 }}>{player.pos}</span>{" "}
-                      <strong>{player.name}</strong> {player.team && <span className="small">• {player.team}</span>}
-                      {typeof player.value === "number" && (
-                        <span
-                          style={{
-                            background: "#222b38",
-                            color: "#74d7ff",
-                            marginLeft: 10,
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 9,
-                            fontWeight: 700,
-                          }}
-                        >
-                          value: {player.value.toFixed(0)}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ fontWeight: 700, color: "#22c55e", marginRight: 12 }}>
-                        {typeof player.proj === "number" ? player.proj.toFixed(1) : "—"}
-                      </span>
-                      {subtotal !== null && (
-                        <span className="small" style={{ color: "#888", fontSize: 11 }}>
-                          Σ {subtotal.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="row" key={`ghost${i}`} style={{
+            {Array.from({ length: maxCount }).map((_, i) => {
+              const h = homeAdds[i]?.player;
+              const a = awayAdds[i]?.player;
+              // Compare projections to set color for each side
+              let homeColor = "#22c55e", awayColor = "#22c55e";
+              if (h && a && typeof h.proj === "number" && typeof a.proj === "number") {
+                if (h.proj > a.proj) { homeColor = "#22c55e"; awayColor = "#cf2a27"; }
+                else if (h.proj < a.proj) { homeColor = "#cf2a27"; awayColor = "#22c55e"; }
+                else { homeColor = awayColor = "#22c55e"; }
+              }
+
+              // height sync: determine the tallest of the two actual rendered nodes
+              // for simplicity, use a fixed minHeight, but set alignItems: stretch at the parent
+
+              return (
+                <React.Fragment key={i}>
+                  <div className="row" style={{
                     minHeight: 54,
-                    opacity: 0.25,
-                    background: "var(--row2)",
-                    borderStyle: "dashed",
-                  }}></div>
-                )
-              )}
-            </div>
-            {/* Away starters */}
-            <div className="player-col" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {awayAdds.map(({ player, subtotal }, i: number) =>
-                player ? (
-                  <div className="row" key={player.id ?? i} style={{ minHeight: 54, background: "#191a21" }}>
-                    <div>
-                      <span className="pos" style={{ fontWeight: 600 }}>{player.pos}</span>{" "}
-                      <strong>{player.name}</strong> {player.team && <span className="small">• {player.team}</span>}
-                      {typeof player.value === "number" && (
-                        <span
-                          style={{
-                            background: "#222b38",
-                            color: "#74d7ff",
-                            marginLeft: 10,
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 9,
-                            fontWeight: 700,
-                          }}
-                        >
-                          value: {player.value.toFixed(0)}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ fontWeight: 700, color: "#22c55e", marginRight: 12 }}>
-                        {typeof player.proj === "number" ? player.proj.toFixed(1) : "—"}
-                      </span>
-                      {subtotal !== null && (
-                        <span className="small" style={{ color: "#888", fontSize: 11 }}>
-                          Σ {subtotal.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
+                    height: "100%", // stretch
+                    background: h ? "#191a21" : "var(--row2)",
+                    opacity: h ? 1 : 0.25,
+                    borderStyle: h ? undefined : "dashed"
+                  }}>
+                    {h && (
+                      <>
+                        <div>
+                          <span className="pos" style={{ fontWeight: 600 }}>{h.pos}</span>{" "}
+                          <strong>{h.name}</strong> {h.team && <span className="small">• {h.team}</span>}
+                          {typeof h.value === "number" && (
+                            <span
+                              style={{
+                                background: "#222b38",
+                                color: "#74d7ff",
+                                marginLeft: 10,
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                borderRadius: 9,
+                                fontWeight: 700,
+                              }}
+                            >
+                              value: {h.value.toFixed(0)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span style={{ fontWeight: 700, color: homeColor, marginRight: 12 }}>
+                            {typeof h.proj === "number" ? h.proj.toFixed(1) : "—"}
+                          </span>
+                          {homeAdds[i]?.subtotal !== null && (
+                            <span className="small" style={{ color: "#888", fontSize: 11 }}>
+                              Σ {homeAdds[i].subtotal.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
-                ) : (
-                  <div className="row" key={`ghost${i}`} style={{
+                  <div className="row" style={{
                     minHeight: 54,
-                    opacity: 0.25,
-                    background: "var(--row2)",
-                    borderStyle: "dashed",
-                  }}></div>
-                )
-              )}
-            </div>
+                    height: "100%", // stretch
+                    background: a ? "#191a21" : "var(--row2)",
+                    opacity: a ? 1 : 0.25,
+                    borderStyle: a ? undefined : "dashed"
+                  }}>
+                    {a && (
+                      <>
+                        <div>
+                          <span className="pos" style={{ fontWeight: 600 }}>{a.pos}</span>{" "}
+                          <strong>{a.name}</strong> {a.team && <span className="small">• {a.team}</span>}
+                          {typeof a.value === "number" && (
+                            <span
+                              style={{
+                                background: "#222b38",
+                                color: "#74d7ff",
+                                marginLeft: 10,
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                borderRadius: 9,
+                                fontWeight: 700,
+                              }}
+                            >
+                              value: {a.value.toFixed(0)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span style={{ fontWeight: 700, color: awayColor, marginRight: 12 }}>
+                            {typeof a.proj === "number" ? a.proj.toFixed(1) : "—"}
+                          </span>
+                          {awayAdds[i]?.subtotal !== null && (
+                            <span className="small" style={{ color: "#888", fontSize: 11 }}>
+                              Σ {awayAdds[i].subtotal.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         );
       })()}
