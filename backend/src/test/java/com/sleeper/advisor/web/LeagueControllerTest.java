@@ -2,6 +2,7 @@ package com.sleeper.advisor.web;
 
 import com.sleeper.advisor.model.LeagueUser;
 import com.sleeper.advisor.service.SleeperClient;
+import com.sleeper.advisor.service.MatchupService;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ class LeagueControllerTest {
 
     @MockBean
     private SleeperClient sleeperClient;
+
+    @MockBean
+    private MatchupService matchupService;
 
     @Test
     void league_members_maps_to_leagueuser_contract() throws Exception {

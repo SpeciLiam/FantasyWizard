@@ -49,20 +49,52 @@ const Row: React.FC<{ children: React.ReactNode; alt?: boolean; className?: stri
   className
 }) => <div className={`row${alt ? " alt" : ""}${className ? " " + className : ""}`}>{children}</div>;
 
-const PlayerRow: React.FC<{ p: Player }> = ({ p }) => (
-  <Row>
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div className="pos">{p.pos}</div>
-      <div>
-        <strong>{p.name}</strong> {p.team ? <span className="small"> • {p.team}</span> : null}
+const PlayerCardDetailed: React.FC<{ p: Player, role?: "starter" | "bench" | "taxi", rosProj?: number }> = ({ p, role = "starter", rosProj }) => {
+  let borderColor = "#22c55e";
+  let bg = "#1a1a1a";
+  if (role === "bench") {
+    borderColor = "#7b7d8a"; bg = "#23242b";
+  }
+  if (role === "taxi") {
+    borderColor = "#d7bb2f"; bg = "#29281a";
+  }
+  return (
+    <div
+      className="row"
+      style={{
+        minHeight: 54,
+        background: bg,
+        border: `2px solid ${borderColor}`,
+        borderRadius: 10,
+        marginBottom: 5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="pos" style={{ fontWeight: 600, color: borderColor }}>{p.pos}</div>
+        <div>
+          <strong>{p.name}</strong> {p.team ? <span className="small"> • {p.team}</span> : null}
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <span style={{ fontWeight: 700, color: "#22c55e", marginRight: 14 }}>
+          {typeof p.proj === "number" ? p.proj.toFixed(1) : "—"}
+        </span>
+        <span className="small" style={{ color: "#aaa", marginLeft: 10, marginRight: 12 }}>
+          val {p.value?.toFixed(0) ?? "—"}
+        </span>
+        <div className="small" style={{ color: "#888" }}>
+          Week Projected: <span style={{ color: "#22c55e" }}>{typeof p.proj === "number" ? p.proj.toFixed(1) : "—"}</span>
+        </div>
+        <div className="small" style={{ color: "#888" }}>
+          Season Projected: <span style={{ color: "#38bdf8" }}>{typeof rosProj === "number" ? rosProj.toFixed(1) : (typeof p.proj === "number" ? p.proj.toFixed(1) : "—")}</span>
+        </div>
       </div>
     </div>
-    <div className="small">
-      <span>{p.proj?.toFixed(1) ?? "—"} pts</span>
-      <span style={{ marginLeft: 8 }}>val {p.value?.toFixed(0) ?? "—"}</span>
-    </div>
-  </Row>
-);
+  );
+};
 
 const PickRow: React.FC<{ pick: DraftPick }> = ({ pick }) => (
   <Row alt>
@@ -181,77 +213,26 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Load matchups+rosters+player info on leagueId/week, then build matchup pairs with player cards & projected scores
+  // Load matchups: fetch from backend projections API
   useEffect(() => {
     let ok = true;
+    console.log('Triggering matchups load with', {leagueId, season, week, tab});
+    if (tab !== "matchups") return; // Only fetch matchups when matchups tab is active
     (async () => {
-      if (!leagueId || !week) return;
+      if (!leagueId || !week || !season) return;
       setLoading(true); setErr(null);
       try {
-        const [rows, rosters, playerDict] = await Promise.all([
-          getWeekMatchups(leagueId, week),
-          getRosters(leagueId),
-          getSleeperPlayersDict(),
-        ]);
-
-        // Build up a map from roster_id to their starters as Player[]
-        const startersMap = new Map<number, Player[]>();
-        for (const roster of rosters) {
-          let starters: Player[] = [];
-          // Find this roster in the matchup rows for this week for a possible starters list
-          const row = rows.find((r: any) => r.roster_id === roster.roster_id);
-          if (row?.starters && Array.isArray(row.starters)) {
-            starters = row.starters.map((pid: string) => {
-              const info = playerDict?.[pid];
-              return info
-                ? {
-                    id: pid,
-                    name: info.full_name ?? pid,
-                    pos: info.position ?? "",
-                    team: info.team ?? "",
-                    // will default to undefined, since playerDict has no projections
-                    proj: undefined,
-                    value: undefined
-                  }
-                : { id: pid, name: pid, pos: "", team: "", proj: undefined, value: undefined };
-            });
-          }
-          startersMap.set(roster.roster_id, starters);
-        }
-
-        // Build matchups with full Player[] and correct projected total for each side
-        const rawPairs = buildMatchupPairs(rows, rosters);
-        const pairsWithPlayers: MatchupPair[] = rawPairs.map(pair => {
-          // Find roster id for each user
-          const getRosterForUserId = (userId: string) =>
-            rosters.find((r: any) => r.owner_id === userId)?.roster_id;
-          const homeRoster = getRosterForUserId(pair.home.userId);
-          const awayRoster = getRosterForUserId(pair.away.userId);
-          const homeStarters = homeRoster ? startersMap.get(homeRoster) ?? [] : [];
-          const awayStarters = awayRoster ? startersMap.get(awayRoster) ?? [] : [];
-
-          // Calculate correct projected total for each side
-          const sumProj = (players: Player[]) =>
-            players.reduce((sum, p) => sum + (typeof p.proj === "number" ? p.proj : 0), 0);
-
-          return {
-            ...pair,
-            home: {
-              ...pair.home,
-              starters: homeStarters,
-              projectedTotal: sumProj(homeStarters)
-            },
-            away: {
-              ...pair.away,
-              starters: awayStarters,
-              projectedTotal: sumProj(awayStarters)
-            }
-          };
-        });
-
+        // BACKEND URL can be set via .env variable, fallback to localhost
+        const url = `http://localhost:8080/api/projections/${season}/${week}/league/${leagueId}?format=ppr`;
+        console.log("About to fetch", url);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("Projections API error: " + resp.status);
+        const data = await resp.json();
+        console.log("Loaded pairs:", data.pairs);
         if (!ok) return;
-        setPairs(pairsWithPlayers);
+        setPairs(data.pairs || []);
       } catch (e: any) {
+        console.log("Fetch error:", e);
         if (!ok) return;
         setErr(e?.message ?? "Failed to load matchups");
       } finally {
@@ -260,7 +241,7 @@ export default function App() {
       }
     })();
     return () => { ok = false; };
-  }, [leagueId, week]);
+  }, [leagueId, season, week, tab]);
 
   // Reorder so the selected member’s matchup is first
   const orderedPairs = useMemo(() => {
@@ -284,6 +265,17 @@ export default function App() {
       setChatLog((prev) => [...prev, { role: "assistant", text: "LLM disabled (wire later)." }]);
     }, 250);
   };
+
+  // --- ROS projections cache ---
+  const [rosProjections, setRosProjections] = useState<Record<string, number>>({});
+  useEffect(() => {
+    // Only supports ppr for now
+    fetch("http://localhost:8080/api/projections/ros?format=ppr")
+      .then(r => r.json())
+      .then(r => {
+        setRosProjections(r.map || {});
+      }).catch(() => { /* ignore */ });
+  }, []);
 
   // UI main
   return (
@@ -407,16 +399,37 @@ export default function App() {
               <>
                 <div className="card">
                   <Title>Starters</Title>
-                  {roster?.starters.map((p: Player) => <PlayerRow key={p.id} p={p} />) || <div className="small">No starters</div>}
+                  {roster?.starters.map((p: Player) => (
+                    <PlayerCardDetailed
+                      key={p.id}
+                      p={p}
+                      role="starter"
+                      rosProj={rosProjections[p.id]}
+                    />
+                  )) || <div className="small">No starters</div>}
                 </div>
                 <div className="card">
                   <Title>Bench</Title>
-                  {roster?.bench.map((p: Player) => <PlayerRow key={p.id} p={p} />) || <div className="small">No bench players</div>}
+                  {roster?.bench.map((p: Player) => (
+                    <PlayerCardDetailed
+                      key={p.id}
+                      p={p}
+                      role="bench"
+                      rosProj={rosProjections[p.id]}
+                    />
+                  )) || <div className="small">No bench players</div>}
                 </div>
                 <div className="card">
                   <Title>Taxi (if enabled)</Title>
                   {roster?.taxi.length
-                    ? roster.taxi.map((p: Player) => <PlayerRow key={p.id} p={p} />)
+                    ? roster.taxi.map((p: Player) => (
+                        <PlayerCardDetailed
+                          key={p.id}
+                          p={p}
+                          role="taxi"
+                          rosProj={rosProjections[p.id]}
+                        />
+                      ))
                     : <div className="small">No taxi players.</div>
                   }
                 </div>
