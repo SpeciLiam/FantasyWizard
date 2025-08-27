@@ -34,7 +34,7 @@ public class SleeperClient {
         }
     }
 
-    @Cacheable(value = "leaguesCache", key = "#userId + '_' + #season")
+    @Cacheable(cacheNames = "userLeagues", key = "#userId + ':' + #season")
     public List<Map<String,Object>> getUserLeagues(String userId, String season) {
         String endpoint = BASE_URL + "/v1/user/" + userId + "/leagues/nfl/" + season;
         log.info("GET Sleeper: {}", endpoint);
@@ -58,7 +58,7 @@ public class SleeperClient {
         }
     }
 
-    @Cacheable(value = "membersCache", key = "#leagueId")
+    @Cacheable(cacheNames = "leagueUsers", key = "#leagueId")
     public List<Map<String,Object>> getLeagueMembers(String leagueId) {
         String endpoint = BASE_URL + "/v1/league/" + leagueId + "/users";
         log.info("GET Sleeper: {}", endpoint);
@@ -82,7 +82,7 @@ public class SleeperClient {
         }
     }
 
-    @Cacheable(value = "rostersCache", key = "#leagueId")
+    @Cacheable(cacheNames = "leagueRosters", key = "#leagueId")
     public List<Map<String,Object>> getLeagueRosters(String leagueId) {
         String endpoint = BASE_URL + "/v1/league/" + leagueId + "/rosters";
         log.info("GET Sleeper: {}", endpoint);
@@ -106,7 +106,7 @@ public class SleeperClient {
         }
     }
 
-    @Cacheable(value = "matchupsCache", key = "#leagueId + '_' + #week")
+    @Cacheable(cacheNames = "leagueMatchups", key = "#leagueId + ':' + #week")
     public List<Map<String,Object>> getMatchups(String leagueId, int week) {
         String endpoint = BASE_URL + "/v1/league/" + leagueId + "/matchups/" + week;
         log.info("GET Sleeper: {}", endpoint);
@@ -130,7 +130,7 @@ public class SleeperClient {
         }
     }
 
-    @Cacheable(value = "tradedPicksCache", key = "#leagueId")
+    @Cacheable(cacheNames = "tradedPicks", key = "#leagueId")
     public List<Map<String,Object>> getTradedPicks(String leagueId) {
         String endpoint = BASE_URL + "/v1/league/" + leagueId + "/traded_picks";
         log.info("GET Sleeper: {}", endpoint);
@@ -154,7 +154,7 @@ public class SleeperClient {
         }
     }
 
-    @Cacheable(value = "playersMap")
+    @Cacheable(cacheNames = "playersMap", key = "'all'")
     public Map<String, Map<String,Object>> getPlayersMap() {
         String endpoint = BASE_URL + "/v1/players/nfl";
         log.info("GET Sleeper: {}", endpoint);
@@ -175,6 +175,16 @@ public class SleeperClient {
         } catch (HttpClientErrorException ex) {
             log.error("Error fetching players map: {}", ex.getMessage());
             throw ex;
+        }
+    }
+
+    @Cacheable(cacheNames = "nflState", key = "'state'")
+    public Map<String,Object> getNflState() {
+        String url = "https://api.sleeper.app/v1/state/nfl";
+        try {
+            return restTemplate.getForObject(url, Map.class);
+        } catch (Exception e) {
+            return Map.of(); // safe fallback
         }
     }
 }

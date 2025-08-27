@@ -48,3 +48,9 @@ export async function fetchMatchups(leagueId: string, week: number) {
   if (!res.ok) throw new Error(`Matchups fetch failed: ${res.status}`);
   return (await res.json()) as MatchupsResponse;
 }
+
+export async function fetchState() {
+  const res = await fetch(`${API_BASE}/api/state`);
+  if (!res.ok) throw new Error(`State fetch failed: ${res.status}`);
+  return (await res.json()) as { season?: number; week?: number };
+}

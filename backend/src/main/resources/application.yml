@@ -2,6 +2,9 @@ app:
   cors:
     origins: http://localhost:8000
   cache:
+    # playersMapTtlHours: 24
+    # defaultTtlMinutes: 5
+    # Note: TTLs are set in CacheConfig; change there if needed.
     playersTtlMinutes: 1440
     leagueTtlMinutes: 5
 

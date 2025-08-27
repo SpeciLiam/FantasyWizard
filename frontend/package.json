@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "esbuild src/main.tsx --bundle --outfile=public/bundle.js --loader:.tsx=tsx --loader:.ts=ts --sourcemap --define:process.env.NODE_ENV=\\\"development\\\" --watch --servedir=public",
-    "build": "esbuild src/main.tsx --bundle --minify --outfile=public/bundle.js --loader:.tsx=tsx --loader:.ts=ts --define:process.env.NODE_ENV=\\\"production\\\""
+    "dev": "esbuild src/App.tsx --bundle --outfile=public/bundle.js --loader:.tsx=tsx --loader:.ts=ts --sourcemap --define:process.env.NODE_ENV=\\\"development\\\" --watch --servedir=public",
+    "build": "esbuild src/App.tsx --bundle --minify --outfile=public/bundle.js --loader:.tsx=tsx --loader:.ts=ts --define:process.env.NODE_ENV=\\\"production\\\""
   },
   "dependencies": {
     "react": "^18.3.1",

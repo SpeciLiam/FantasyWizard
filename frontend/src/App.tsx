@@ -9,6 +9,7 @@ import {
   fetchLeagues,
   fetchRoster,
   fetchMatchups,
+  fetchState,
 } from './api';
 import {
   getLeagueUsers,
@@ -147,6 +148,18 @@ export default function App() {
   const [username, setUsername] = useState('SpeciLiam');
   const [season, setSeason] = useState<number>(2025);
   const [week, setWeek] = useState<number>(1);
+
+  // On mount: fetch state and update week/season if available
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await fetchState();
+        if (typeof s?.week === "number" && s.week >= 1 && s.week <= 18) setWeek(s.week);
+        if (typeof s?.season === "number" && !season) setSeason(s.season);
+      } catch (_) { /* ignore, keep defaults */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Data
   const [leagues, setLeagues] = useState<
@@ -353,14 +366,20 @@ export default function App() {
           }
         />
         <label>Week</label>
-        <input
+        <select
           className="input"
-          type="number"
           value={week}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setWeek(parseInt(e.target.value || '1', 10))
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+            setWeek(parseInt(e.target.value, 10))
           }
-        />
+          aria-label="Week selector"
+        >
+          {Array.from({ length: 18 }, (_, i) => i + 1).map(w => (
+            <option key={w} value={w}>
+              Week {w}
+            </option>
+          ))}
+        </select>
         <button
           className="button"
           onClick={() =>
