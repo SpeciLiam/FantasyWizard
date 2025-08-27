@@ -8,13 +8,13 @@ _Empowering fantasy football players with insights, real-time matchup views, and
 
 - [Overview](#overview)
 - [Monorepo Structure](#monorepo-structure)
-- [Stack & Architecture](#stack--architecture)
+- [Stack &amp; Architecture](#stack--architecture)
 - [Quickstart](#quickstart)
-- [Configuration & Environment Variables](#configuration--environment-variables)
+- [Configuration &amp; Environment Variables](#configuration--environment-variables)
 - [REST API Reference](#rest-api-reference)
 - [Troubleshooting](#troubleshooting)
-- [Useful Scripts & Commands](#useful-scripts--commands)
-- [Decisions & Notes](#decisions--notes)
+- [Useful Scripts &amp; Commands](#useful-scripts--commands)
+- [Decisions &amp; Notes](#decisions--notes)
 - [Security](#security)
 - [License](#license)
 
@@ -111,8 +111,7 @@ All backend endpoints are prefixed with `/api`.
 - **GET** `/api/user/{username}/leagues?season=2025`
 - **GET** `/api/league/{leagueId}/members`
 - **GET** `/api/league/{leagueId}/roster/{userId}?week=1`
-- **GET** `/api/league/{leagueId}/matchups/{week}`  
-  _Returns all matchups for a week. The UI sorts and highlights the selected member’s matchup._
+- **GET** `/api/league/{leagueId}/matchups/{week}`_Returns all matchups for a week. The UI sorts and highlights the selected member’s matchup._
 - **POST** `/api/explain` (LLM optional)
 - **POST** `/api/trades`, **POST** `/api/generate/trades` (LLM optional)
 
@@ -125,6 +124,7 @@ All matchups, roster, and member data in the UI is loaded live from these endpoi
 ## Troubleshooting
 
 - **CORS Issues**: Set `app.cors.origins` in backend config. Default allows `http://localhost:5173`.
+- open -n **"/Applications/Microsoft Edge.app"** --args --user-data-dir**=**"**$HOME**/msedge-dev-data" --disable-web-security
 - **Java Version**: Requires Java 17 or later.
 - **Port Conflicts**: Backend default is 8080, frontend is 5173.
 - **Dependency Problems**: Ensure `node_modules` for UI, run `./gradlew` for backend, check `.gitignore` does not include lockfiles if you want reproducible installs.
