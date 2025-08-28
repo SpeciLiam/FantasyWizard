@@ -26,6 +26,17 @@ _Empowering fantasy football players with insights, real-time matchup views, and
 
 ---
 
+## Project Status & Recent Changes (August 2025)
+
+- **Grid Layout Improvements:** Columns now shrink as needed—panels and cards stay fully contained in their grid tracks even with long content or very narrow screens.
+- **Conditional Center Column:** The middle pane now shows either your roster or league matchups, based on the active tab (never both side by side). Matches current UI/UX best practices.
+- **Accessibility:** Tab toggle buttons use `aria-selected` for clear screen reader support.
+- **Live Data Only:** All matchups, rosters, and players are loaded dynamically from the API; no mocks.
+- **Main Development:** The `fantasy-frontend/` project is under active development and is the recommended UI. `frontend/` exists for legacy/testing.
+- See project `/frontend` and `/fantasy-frontend/public/styles.css` for latest CSS fixes.
+
+---
+
 ## Monorepo Structure
 
 ```
