@@ -12,8 +12,6 @@ import {
   fetchState,
   sendAdvisorChat,
 } from './api';
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 import {
   getLeagueUsers,
   getRosters,
@@ -21,6 +19,8 @@ import {
   buildMatchupPairs,
   getSleeperPlayersDict,
 } from './sleeper';
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 
 export type LeagueUser = {
   userId: string;
