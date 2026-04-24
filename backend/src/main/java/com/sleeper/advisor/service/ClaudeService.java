@@ -31,7 +31,7 @@ public class ClaudeService {
     @Value("${app.openai.api-key:}")
     private String apiKey;
 
-    @Value("${app.openai.model:gpt-4o-mini}")
+    @Value("${app.openai.model:gpt-5.4-mini}")
     private String model;
 
     private final RestTemplate restTemplate = new RestTemplate();
