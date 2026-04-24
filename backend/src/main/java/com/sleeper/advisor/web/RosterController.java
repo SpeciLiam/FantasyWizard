@@ -1,6 +1,7 @@
 package com.sleeper.advisor.web;
 
 import com.sleeper.advisor.service.SleeperClient;
+import com.sleeper.advisor.service.ProjectionStore;
 import com.sleeper.advisor.model.Player;
 import com.sleeper.advisor.model.DraftPick;
 import com.sleeper.advisor.model.Roster;
@@ -18,9 +19,9 @@ public class RosterController {
     private static final Logger log = LoggerFactory.getLogger(RosterController.class);
 
     private final SleeperClient sleeperClient;
-    private final com.sleeper.advisor.service.ProjectionStore projectionStore;
+    private final ProjectionStore projectionStore;
 
-    public RosterController(SleeperClient sleeperClient, com.sleeper.advisor.service.ProjectionStore projectionStore) {
+    public RosterController(SleeperClient sleeperClient, ProjectionStore projectionStore) {
         this.sleeperClient = sleeperClient;
         this.projectionStore = projectionStore;
     }
@@ -33,75 +34,94 @@ public class RosterController {
 
         int week = 1;
         try { week = Integer.parseInt(weekStr); } catch (NumberFormatException ignored) {}
-
-        if (week < 1) {
-            throw new IllegalArgumentException("Week must be >= 1.");
-        }
+        if (week < 1) throw new IllegalArgumentException("Week must be >= 1.");
 
         log.info("GET /api/league/{}/roster/{}?week={}", leagueId, userId, week);
 
-        // 1. Fetch all rosters for the league
         List<Map<String, Object>> rosters = sleeperClient.getLeagueRosters(leagueId);
-
-        // 2. Find user's roster (owner_id == userId)
         Map<String, Object> myRoster = rosters.stream()
-                .filter(r -> r.containsKey("owner_id") && Objects.equals(r.get("owner_id"), userId))
+                .filter(r -> Objects.equals(r.get("owner_id"), userId))
                 .findFirst()
                 .orElse(Collections.emptyMap());
 
-        // Parse starters, all players, taxi, bench
-        List<String> startersIds = myRoster.get("starters") instanceof List<?> ? 
-            ((List<?>) myRoster.get("starters")).stream().map(Object::toString).collect(Collectors.toList()) : Collections.emptyList();
-        List<String> allPlayerIds = myRoster.get("players") instanceof List<?> ? 
-            ((List<?>) myRoster.get("players")).stream().map(Object::toString).collect(Collectors.toList()) : Collections.emptyList();
-        List<String> taxiIds = myRoster.get("taxi") instanceof List<?> ?
-            ((List<?>) myRoster.get("taxi")).stream().map(Object::toString).collect(Collectors.toList()) : Collections.emptyList();
+        List<String> startersIds = toStringList(myRoster.get("starters"));
+        List<String> allPlayerIds = toStringList(myRoster.get("players"));
+        List<String> taxiIds = toStringList(myRoster.get("taxi"));
 
-        Set<String> benchSet = new HashSet<>(allPlayerIds);
+        Set<String> benchSet = new LinkedHashSet<>(allPlayerIds);
         benchSet.removeAll(startersIds);
         benchSet.removeAll(taxiIds);
         List<String> benchIds = new ArrayList<>(benchSet);
 
-        // 3. playersMap lookup and mapping
         Map<String, Map<String, Object>> playersMap = sleeperClient.getPlayersMap();
+
+        // Fetch real Sleeper projections for the requested week
+        Map<String, Object> state = sleeperClient.getNflState();
+        int season = state.get("season") instanceof Number n
+                ? n.intValue()
+                : (state.get("season") != null ? Integer.parseInt(state.get("season").toString()) : 2025);
+        Map<String, Map<String, Object>> weekProjections = sleeperClient.getWeekProjections(season, week);
+
         List<Player> starters = startersIds.stream()
-                .map(pid -> playerFromMap(pid, playersMap.get(pid)))
+                .map(pid -> playerFromMap(pid, playersMap.get(pid), weekProjections))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         List<Player> bench = benchIds.stream()
-                .map(pid -> playerFromMap(pid, playersMap.get(pid)))
+                .map(pid -> playerFromMap(pid, playersMap.get(pid), weekProjections))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         List<Player> taxi = taxiIds.stream()
-                .map(pid -> playerFromMap(pid, playersMap.get(pid)))
+                .map(pid -> playerFromMap(pid, playersMap.get(pid), weekProjections))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-        // 4. picks
-        List<Map<String, Object>> picksRaw = sleeperClient.getTradedPicks(leagueId);
-        List<DraftPick> picks = picksRaw.stream()
-                .filter(pick -> Objects.equals(pick.get("owner_id"), userId))
-                .map(pick -> new DraftPick(
-                        intOrElse(pick.get("season"), 0),
-                        intOrElse(pick.get("round"), 0),
-                        pick.get("previous_owner_id") == null ? null : pick.get("previous_owner_id").toString(),
-                        pick.get("owner_id") == null ? null : pick.get("owner_id").toString(),
-                        !Objects.equals(pick.get("owner_id"), pick.get("previous_owner_id")) // traded if owner ≠ original
-                ))
-                .collect(Collectors.toList());
+        // Picks: include the user's own draft_picks (default ownership) plus
+        // any traded picks where current owner_id == userId
+        List<DraftPick> picks = new ArrayList<>();
+        Object ownDraftPicks = myRoster.get("draft_picks");
+        if (ownDraftPicks instanceof List<?> ownList) {
+            for (Object o : ownList) {
+                if (o instanceof Map<?, ?> p) {
+                    int s = intOrElse(p.get("season"), 0);
+                    int r = intOrElse(p.get("round"), 0);
+                    if (s == 0 || r == 0) continue;
+                    picks.add(new DraftPick(s, r, userId, userId, false));
+                }
+            }
+        }
+        List<Map<String, Object>> traded = sleeperClient.getTradedPicks(leagueId);
+        for (Map<String, Object> pick : traded) {
+            if (Objects.equals(pick.get("owner_id"), userId)) {
+                int s = intOrElse(pick.get("season"), 0);
+                int r = intOrElse(pick.get("round"), 0);
+                if (s == 0 || r == 0) continue;
+                String orig = pick.get("previous_owner_id") != null ? pick.get("previous_owner_id").toString() : null;
+                picks.add(new DraftPick(s, r, orig, userId, !Objects.equals(orig, userId)));
+            }
+        }
 
-        // 5. Return new Roster
         return new Roster(starters, bench, taxi, picks);
     }
 
-    private Player playerFromMap(String id, Map<String, Object> player) {
+    private Player playerFromMap(String id, Map<String, Object> player, Map<String, Map<String, Object>> weekProjections) {
         if (player == null) return null;
-        String name = player.getOrDefault("full_name", "").toString();
-        String pos = player.getOrDefault("position", "").toString();
-        String team = player.getOrDefault("team", "").toString();
-        Double proj = projectionStore.projectedPoints(id, pos);
+        String name = String.valueOf(player.getOrDefault("full_name", id));
+        String pos = String.valueOf(player.getOrDefault("position", ""));
+        String team = String.valueOf(player.getOrDefault("team", ""));
+        Double proj = projectionStore.projectedPoints(id, pos, weekProjections, "ppr");
         Double value = projectionStore.marketValue(id, pos);
         return new Player(id, name, pos, team, proj, value);
+    }
+
+    private static List<String> toStringList(Object o) {
+        if (!(o instanceof List<?> list)) return Collections.emptyList();
+        List<String> out = new ArrayList<>();
+        for (Object x : list) {
+            if (x == null) continue;
+            String s = x.toString();
+            if (!s.isEmpty() && !"null".equalsIgnoreCase(s) && !"EMPTY".equalsIgnoreCase(s)) out.add(s);
+        }
+        return out;
     }
 
     private int intOrElse(Object obj, int defVal) {

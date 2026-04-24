@@ -18,12 +18,18 @@ public class AdvisorController {
 
     @PostMapping("/chat")
     public Map<String, String> chat(@RequestBody ChatRequest req) {
-        String reply = claudeService.chat(req.message(), req.history());
+        String enrichedMessage = req.message();
+        if (req.context() != null && !req.context().isBlank()) {
+            enrichedMessage = "Context (current roster / matchup data):\n" + req.context()
+                    + "\n\n---\nUser question: " + req.message();
+        }
+        String reply = claudeService.chat(enrichedMessage, req.history());
         return Map.of("reply", reply);
     }
 
     public record ChatRequest(
             String message,
-            List<Map<String, String>> history
+            List<Map<String, String>> history,
+            String context
     ) {}
 }

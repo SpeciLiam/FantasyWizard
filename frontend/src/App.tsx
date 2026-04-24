@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import ReactMarkdown from 'react-markdown';
 
 import {
   Player,
@@ -322,11 +323,36 @@ export default function App() {
     const text = chatInput.trim();
     if (!text || chatLoading) return;
     const history = chatLog.map((m) => ({ role: m.role, content: m.text }));
+
+    let context = '';
+    if (selectedUser) {
+      context += `Selected manager: ${selectedUser.displayName} (Week ${week})\n`;
+    }
+    if (roster) {
+      const fmt = (p: Player) =>
+        `  - ${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''}` +
+        (typeof p.proj === 'number' ? ` — proj ${p.proj.toFixed(1)}` : '');
+      if (roster.starters?.length) {
+        context += `Starters:\n${roster.starters.map(fmt).join('\n')}\n`;
+      }
+      if (roster.bench?.length) {
+        context += `Bench:\n${roster.bench.map(fmt).join('\n')}\n`;
+      }
+      if (roster.taxi?.length) {
+        context += `Taxi:\n${roster.taxi.map(fmt).join('\n')}\n`;
+      }
+      if (roster.picks?.length) {
+        context += `Draft picks: ${roster.picks
+          .map((p) => `${p.season} R${p.round}${p.traded ? ' (traded)' : ''}`)
+          .join(', ')}\n`;
+      }
+    }
+
     setChatLog((prev) => [...prev, { role: 'user', text }]);
     setChatInput('');
     setChatLoading(true);
     try {
-      const reply = await sendAdvisorChat(text, history);
+      const reply = await sendAdvisorChat(text, history, context || undefined);
       setChatLog((prev) => [...prev, { role: 'assistant', text: reply }]);
     } catch (e: any) {
       setChatLog((prev) => [
@@ -898,15 +924,20 @@ export default function App() {
                   i: number
                 ) => (
                   <div key={i} className={`msg ${m.role}`}>
-                    <div
-                      className="small"
-                      style={{ marginBottom: 4, textTransform: 'uppercase' }}
-                    >
-                      {m.role}
+                    <div className="msg-role">
+                      {m.role === 'user' ? 'You' : 'Advisor'}
                     </div>
-                    {m.text}
+                    <div className="msg-body">
+                      <ReactMarkdown>{m.text}</ReactMarkdown>
+                    </div>
                   </div>
                 )
+              )}
+              {chatLoading && (
+                <div className="msg assistant">
+                  <div className="msg-role">Advisor</div>
+                  <div className="msg-body typing">thinking…</div>
+                </div>
               )}
             </div>
 
