@@ -881,10 +881,10 @@ export default function App() {
 
           {/* RIGHT: Advisor Chat */}
           <div className="panel chat">
-            <div className=”card” style={{ paddingBottom: 8 }}>
+            <div className="card" style={{ paddingBottom: 8 }}>
               <Title>Advisor Chat</Title>
-              <div className=”small”>
-                Ask things like “Who should I start?” or “Should I make this trade?”
+              <div className="small">
+                Ask things like "Who should I start?" or "Should I make this trade?"
               </div>
             </div>
 
