@@ -57,7 +57,7 @@ public class ClaudeService {
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
         body.put("messages", messages);
-        body.put("max_tokens", 1024);
+        body.put("max_completion_tokens", 1024);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
