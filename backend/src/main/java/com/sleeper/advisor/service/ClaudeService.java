@@ -1,16 +1,16 @@
 package com.sleeper.advisor.service;
 
-import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.models.messages.Message;
-import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.Model;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,54 +26,59 @@ public class ClaudeService {
             projection data or injury info, factor it into your recommendations.
             """;
 
-    @Value("${app.anthropic.api-key:}")
+    private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+
+    @Value("${app.openai.api-key:}")
     private String apiKey;
 
-    private AnthropicClient client;
+    @Value("${app.openai.model:gpt-4o-mini}")
+    private String model;
 
-    @PostConstruct
-    void init() {
-        if (apiKey != null && !apiKey.isBlank()) {
-            client = AnthropicOkHttpClient.builder().apiKey(apiKey).build();
-        } else {
-            // Falls back to ANTHROPIC_API_KEY env var
-            try {
-                client = AnthropicOkHttpClient.fromEnv();
-            } catch (Exception e) {
-                log.warn("Anthropic API key not configured — advisor chat disabled");
-            }
-        }
-    }
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public String chat(String userMessage, List<Map<String, String>> history) {
-        if (client == null) {
-            return "Advisor chat is not configured. Set ANTHROPIC_API_KEY to enable it.";
+        if (apiKey == null || apiKey.isBlank()) {
+            return "Advisor chat is not configured. Set OPENAI_API_KEY to enable it.";
         }
 
-        MessageCreateParams.Builder builder = MessageCreateParams.builder()
-                .model(Model.CLAUDE_HAIKU_4_5)
-                .maxTokens(1024L)
-                .system(SYSTEM_PROMPT);
-
-        // Replay prior turns
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
         if (history != null) {
             for (Map<String, String> turn : history) {
                 String role = turn.get("role");
                 String content = turn.get("content");
-                if ("user".equals(role)) {
-                    builder.addUserMessage(content);
-                } else if ("assistant".equals(role)) {
-                    builder.addAssistantMessage(content);
+                if (role != null && content != null && ("user".equals(role) || "assistant".equals(role))) {
+                    messages.add(Map.of("role", role, "content", content));
                 }
             }
         }
-        builder.addUserMessage(userMessage);
+        messages.add(Map.of("role", "user", "content", userMessage));
 
-        Message response = client.messages().create(builder.build());
-        return response.content().stream()
-                .flatMap(block -> block.text().stream())
-                .map(tb -> tb.text())
-                .findFirst()
-                .orElse("");
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", model);
+        body.put("messages", messages);
+        body.put("max_tokens", 1024);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiKey);
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> resp = restTemplate.postForObject(OPENAI_URL, new HttpEntity<>(body, headers), Map.class);
+            if (resp == null) return "No response from OpenAI.";
+            Object choices = resp.get("choices");
+            if (choices instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first) {
+                Object msg = first.get("message");
+                if (msg instanceof Map<?, ?> m) {
+                    Object content = m.get("content");
+                    if (content != null) return content.toString();
+                }
+            }
+            return "Unexpected response shape from OpenAI.";
+        } catch (Exception e) {
+            log.warn("OpenAI chat failed: {}", e.getMessage());
+            return "Chat error: " + e.getMessage();
+        }
     }
 }
