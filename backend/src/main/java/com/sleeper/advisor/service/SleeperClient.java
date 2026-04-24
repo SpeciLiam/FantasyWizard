@@ -184,7 +184,39 @@ public class SleeperClient {
         try {
             return restTemplate.getForObject(url, Map.class);
         } catch (Exception e) {
-            return Map.of(); // safe fallback
+            return Map.of();
         }
+    }
+
+    // Returns weekly projections from Sleeper: player_id -> stat map (includes pts_ppr, pts_half_ppr, pts_std)
+    @Cacheable(cacheNames = "weekProjections", key = "#season + ':' + #week")
+    public Map<String, Map<String, Object>> getWeekProjections(int season, int week) {
+        String url = String.format(
+            "https://api.sleeper.app/projections/nfl/%d/%d?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&order_by=pts_ppr",
+            season, week
+        );
+        log.info("GET Sleeper projections: {}", url);
+        try {
+            Object resp = restTemplate.getForObject(url, Object.class);
+            if (resp instanceof List<?> list) {
+                Map<String, Map<String, Object>> out = new HashMap<>();
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> m) {
+                        Object pid = m.get("player_id");
+                        Object stats = m.get("stats");
+                        if (pid != null && stats instanceof Map<?, ?> statsMap) {
+                            Map<String, Object> statsTyped = new HashMap<>();
+                            statsMap.forEach((k, v) -> statsTyped.put(k.toString(), v));
+                            out.put(pid.toString(), statsTyped);
+                        }
+                    }
+                }
+                log.info("Loaded {} player projections for {}/{}", out.size(), season, week);
+                return out;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch projections for {}/{}: {}", season, week, e.getMessage());
+        }
+        return Collections.emptyMap();
     }
 }

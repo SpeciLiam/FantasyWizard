@@ -10,7 +10,10 @@ import {
   fetchRoster,
   fetchMatchups,
   fetchState,
+  sendAdvisorChat,
 } from './api';
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 import {
   getLeagueUsers,
   getRosters,
@@ -277,7 +280,7 @@ export default function App() {
       setErr(null);
       try {
         // BACKEND URL can be set via .env variable, fallback to localhost
-        const url = `http://localhost:8080/api/projections/${season}/${week}/league/${leagueId}?format=ppr`;
+        const url = `${API_BASE}/api/projections/${season}/${week}/league/${leagueId}?format=ppr`;
         console.log('About to fetch', url);
         const resp = await fetch(url);
         if (!resp.ok) throw new Error('Projections API error: ' + resp.status);
@@ -313,18 +316,26 @@ export default function App() {
     return arr;
   }, [pairs, selectedUser]);
 
-  // Chat send (still placeholder)
-  const sendChat = () => {
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const sendChat = async () => {
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text || chatLoading) return;
+    const history = chatLog.map((m) => ({ role: m.role, content: m.text }));
     setChatLog((prev) => [...prev, { role: 'user', text }]);
     setChatInput('');
-    setTimeout(() => {
+    setChatLoading(true);
+    try {
+      const reply = await sendAdvisorChat(text, history);
+      setChatLog((prev) => [...prev, { role: 'assistant', text: reply }]);
+    } catch (e: any) {
       setChatLog((prev) => [
         ...prev,
-        { role: 'assistant', text: 'LLM disabled (wire later).' },
+        { role: 'assistant', text: `Error: ${e?.message ?? 'Chat failed'}` },
       ]);
-    }, 250);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   // --- ROS projections cache ---
@@ -333,7 +344,7 @@ export default function App() {
   );
   useEffect(() => {
     // Only supports ppr for now
-    fetch('http://localhost:8080/api/projections/ros?format=ppr')
+    fetch(`${API_BASE}/api/projections/ros?format=ppr`)
       .then((r) => r.json())
       .then((r) => {
         setRosProjections(r.map || {});
@@ -870,10 +881,10 @@ export default function App() {
 
           {/* RIGHT: Advisor Chat */}
           <div className="panel chat">
-            <div className="card" style={{ paddingBottom: 8 }}>
+            <div className=”card” style={{ paddingBottom: 8 }}>
               <Title>Advisor Chat</Title>
-              <div className="small">
-                💬 LLM disabled (for now). Ask things like “Who should I start?”
+              <div className=”small”>
+                Ask things like “Who should I start?” or “Should I make this trade?”
               </div>
             </div>
 
@@ -911,8 +922,8 @@ export default function App() {
                   e.key === 'Enter' ? sendChat() : null
                 }
               />
-              <button className="button" onClick={sendChat}>
-                Send
+              <button className="button" onClick={sendChat} disabled={chatLoading}>
+                {chatLoading ? '…' : 'Send'}
               </button>
             </div>
           </div>

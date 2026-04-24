@@ -28,6 +28,9 @@ public class MatchupService {
         List<Map<String, Object>> rostersList = sleeperClient.getLeagueRosters(leagueId);
         Map<String, Map<String, Object>> playersMap = sleeperClient.getPlayersMap();
         List<Map<String, Object>> matchupsList = sleeperClient.getMatchups(leagueId, week);
+        Map<String, Object> state = sleeperClient.getNflState();
+        int season = state.get("season") instanceof Number n ? n.intValue() : 2025;
+        Map<String, Map<String, Object>> weekProjections = sleeperClient.getWeekProjections(season, week);
 
         Map<Object, Map<String, Object>> rosterIdToUser = new HashMap<>();
         Map<String, Object> userIdToUser = new HashMap<>();
@@ -67,8 +70,8 @@ public class MatchupService {
 
             MatchupTeam home = null;
             MatchupTeam away = null;
-            if (teams.size() >= 1) home = buildMatchupTeam(teams.get(0), rosterIdToUser, rosterIdToRoster, playersMap);
-            if (teams.size() >= 2) away = buildMatchupTeam(teams.get(1), rosterIdToUser, rosterIdToRoster, playersMap);
+            if (teams.size() >= 1) home = buildMatchupTeam(teams.get(0), rosterIdToUser, rosterIdToRoster, playersMap, weekProjections, "ppr");
+            if (teams.size() >= 2) away = buildMatchupTeam(teams.get(1), rosterIdToUser, rosterIdToRoster, playersMap, weekProjections, "ppr");
             if (home != null) pairs.add(new MatchupPair(home, away));
         }
         System.out.println("[MatchupService] Returning " + pairs.size() + " MatchupPair(s) to controller.");
@@ -79,7 +82,9 @@ public class MatchupService {
             Map<String, Object> teamEntry,
             Map<Object, Map<String, Object>> rosterIdToUser,
             Map<Object, Map<String, Object>> rosterIdToRoster,
-            Map<String, Map<String, Object>> playersMap
+            Map<String, Map<String, Object>> playersMap,
+            Map<String, Map<String, Object>> weekProjections,
+            String format
     ) {
         Object rosterId = teamEntry.get("roster_id");
         Map<String, Object> userMap = rosterId != null ? rosterIdToUser.get(rosterId) : null;
@@ -96,12 +101,12 @@ public class MatchupService {
             String name = getString(pm, "full_name");
             String pos = getString(pm, "position");
             String team = getString(pm, "team");
-            Double proj = projectionStore.projectedPoints(pid, pos);
+            Double proj = projectionStore.projectedPoints(pid, pos, weekProjections, format);
             Double value = projectionStore.marketValue(pid, pos);
             starters.add(new Player(pid, name, pos, team, proj, value));
             projTotal += proj != null ? proj : 0.0;
         }
-        projTotal = Math.round(projTotal * 10.0) / 10.0; // round to 1 decimal
+        projTotal = Math.round(projTotal * 10.0) / 10.0;
 
         return new MatchupTeam(userId, displayName, avatar, projTotal, starters);
     }
@@ -150,6 +155,7 @@ public class MatchupService {
         List<Map<String, Object>> rostersList = sleeperClient.getLeagueRosters(leagueId);
         List<Map<String, Object>> matchupsList = sleeperClient.getMatchups(leagueId, week);
         Map<String, Map<String, Object>> playersMap = sleeperClient.getPlayersMap();
+        Map<String, Map<String, Object>> weekProjections = sleeperClient.getWeekProjections(season, week);
 
         // Build roster_id -> owner_id (user_id)
         Map<Integer, String> rosterToOwner = new HashMap<>();
@@ -182,8 +188,8 @@ public class MatchupService {
             Map<String, Object> b = teams.size() > 1 ? teams.get(1) : null;
 
             // For each team, map to MatchupSide with userId (owner_id) and projectedTotal (projected sum for starters)
-            com.sleeper.advisor.model.MatchupSide sideA = makeProjectedMatchupSide(a, rosterToOwner, playersMap);
-            com.sleeper.advisor.model.MatchupSide sideB = b != null ? makeProjectedMatchupSide(b, rosterToOwner, playersMap) : null;
+            com.sleeper.advisor.model.MatchupSide sideA = makeProjectedMatchupSide(a, rosterToOwner, playersMap, weekProjections, format);
+            com.sleeper.advisor.model.MatchupSide sideB = b != null ? makeProjectedMatchupSide(b, rosterToOwner, playersMap, weekProjections, format) : null;
 
             String aUserId = sideA != null ? sideA.userId() : "";
             String bUserId = sideB != null ? sideB.userId() : "";
@@ -219,7 +225,9 @@ public class MatchupService {
     private com.sleeper.advisor.model.MatchupSide makeProjectedMatchupSide(
             Map<String, Object> teamRow,
             Map<Integer, String> rosterToOwner,
-            Map<String, Map<String, Object>> playersMap
+            Map<String, Map<String, Object>> playersMap,
+            Map<String, Map<String, Object>> weekProjections,
+            String format
     ) {
         // Get roster_id, userId
         Integer rosterId = teamRow.get("roster_id") instanceof Number n ? n.intValue() : null;
@@ -234,7 +242,7 @@ public class MatchupService {
             String name = pmap != null && pmap.get("full_name") != null ? pmap.get("full_name").toString() : pid;
             String pos = pmap != null && pmap.get("position") != null ? pmap.get("position").toString() : "";
             String team = pmap != null && pmap.get("team") != null ? pmap.get("team").toString() : "";
-            Double playerProj = projectionStore.projectedPoints(pid, pos);
+            Double playerProj = projectionStore.projectedPoints(pid, pos, weekProjections, format);
             Double value = projectionStore.marketValue(pid, pos);
             starters.add(new Player(pid, name, pos, team, playerProj, value));
             proj += playerProj != null ? playerProj : 0.0;

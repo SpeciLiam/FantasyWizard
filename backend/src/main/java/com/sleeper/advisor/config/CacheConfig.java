@@ -38,7 +38,10 @@ public class CacheConfig {
       new CaffeineCache("leagueRosters", shortBuilder.build()),
       new CaffeineCache("leagueMatchups", shortBuilder.build()),
       new CaffeineCache("tradedPicks", shortBuilder.build()),
-      new CaffeineCache("nflState", shortBuilder.build())
+      new CaffeineCache("nflState", shortBuilder.build()),
+      new CaffeineCache("weekProjections", shortBuilder.build()),
+      new CaffeineCache("espnInjuries", shortBuilder.build()),
+      new CaffeineCache("espnNews", shortBuilder.build())
     );
 
     manager.setCaches(caches);

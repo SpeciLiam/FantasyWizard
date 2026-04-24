@@ -19,14 +19,13 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
-    implementation 'org.springframework.boot:spring-boot-starter-cache'
 	implementation 'org.springframework.boot:spring-boot-starter'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-cache'
 	implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+	implementation 'com.anthropic:anthropic-java:2.17.0'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
 }
 
 tasks.named('test') {

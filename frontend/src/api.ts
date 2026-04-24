@@ -22,7 +22,21 @@ export type MatchupsResponse = {
   pairs: MatchupPair[];
 };
 
-const API_BASE = "http://localhost:8080";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
+
+export async function sendAdvisorChat(
+  message: string,
+  history: { role: string; content: string }[]
+): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/advisor/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history }),
+  });
+  if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
+  const data = await res.json();
+  return data.reply as string;
+}
 
 export async function fetchLeagues(username: string, season: number) {
   const res = await fetch(`${API_BASE}/api/user/${encodeURIComponent(username)}/leagues?season=${season}`);
