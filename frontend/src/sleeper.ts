@@ -2,7 +2,17 @@ const API = "https://api.sleeper.app";
 
 // sleeper.ts
 export type SleeperUser = { user_id: string; display_name: string; avatar?: string | null };
-export type SleeperRoster = { roster_id: number; owner_id: string };
+export type SleeperRoster = {
+  roster_id: number;
+  owner_id: string;
+  settings?: {
+    wins?: number;
+    losses?: number;
+    ties?: number;
+    fpts?: number;
+    fpts_decimal?: number;
+  };
+};
 export type SleeperMatchupRow = {
   roster_id: number;
   matchup_id?: number | null;
