@@ -1093,3 +1093,189 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
     max-width: none;
   }
 }
+
+@media (max-width: 820px) {
+  html, body, #root {
+    height: auto;
+    min-height: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    position: relative;
+  }
+
+  .topbar-row1 {
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .brand {
+    flex: 1 0 100%;
+    margin-right: 0;
+    font-size: 17px;
+  }
+
+  .field {
+    flex: 1 1 calc(50% - 8px);
+    padding: 7px 10px;
+  }
+
+  .field input,
+  .field select,
+  .field-provider select,
+  .field-username input,
+  .field-season input {
+    width: 100%;
+    min-width: 0;
+    font-size: 13px;
+  }
+
+  .week-glass {
+    order: 3;
+    flex: 1 0 100%;
+    min-width: 0;
+    padding: 10px 12px;
+  }
+
+  .week-tick {
+    width: 15px;
+    font-size: 7.5px;
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  .league-select {
+    flex: 1 0 100%;
+    max-width: none;
+    min-width: 0;
+    padding: 10px 12px;
+  }
+
+  .tb-btn {
+    flex: 1 1 calc(50% - 8px);
+    padding: 9px 10px;
+  }
+
+  .topbar-row2 {
+    padding: 8px 12px;
+    overflow-x: auto;
+  }
+
+  .pill-tab {
+    flex: 1;
+  }
+
+  .board {
+    display: flex;
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .col-left,
+  .col-center,
+  .col-right {
+    width: 100%;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .col-left {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .members {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .col-center {
+    order: 2;
+    padding: 14px 12px 18px;
+  }
+
+  .col-right {
+    order: 3;
+    position: relative;
+    top: auto;
+    height: min(72vh, 620px);
+    border-left: none;
+    border-top: 1px solid var(--border);
+    background:
+      radial-gradient(circle at 90% 0%, rgba(91,127,255,.12), transparent 34%),
+      var(--bg);
+  }
+
+  .chatlog {
+    max-height: none;
+  }
+
+  .team-header {
+    align-items: flex-start;
+  }
+
+  .team-header-right {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
+  }
+
+  .player-card {
+    align-items: flex-start;
+  }
+
+  .proj-cell {
+    min-width: 58px;
+  }
+
+  .starters-grid,
+  .modal > div[style*='grid-template-columns'],
+  .trade-suggestion-card div[style*='grid-template-columns'] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .modal {
+    max-height: 92vh;
+    border-radius: 18px;
+    padding: 18px;
+  }
+}
+
+@media (max-width: 460px) {
+  .field {
+    flex-basis: 100%;
+  }
+
+  .tb-btn {
+    flex-basis: 100%;
+  }
+
+  .week-ticks {
+    gap: 0;
+  }
+
+  .week-tick {
+    width: 13px;
+    font-size: 7px;
+  }
+
+  .matchup-grid {
+    gap: 8px;
+  }
+
+  .msg {
+    max-width: 94%;
+  }
+}
