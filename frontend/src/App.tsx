@@ -764,13 +764,32 @@ export default function App() {
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
-          <div className="field field-season">
+          <div className="season-glass">
             <span className="field-label">Season</span>
-            <input
-              type="number"
-              value={season}
-              onChange={(e) => setSeason(parseInt(e.target.value || '2025', 10))}
-            />
+            <div className="season-stepper">
+              <button
+                type="button"
+                className="season-button"
+                aria-label="Previous season"
+                onClick={() => setSeason((s) => s - 1)}
+              >
+                −
+              </button>
+              <input
+                className="season-input"
+                type="number"
+                value={season}
+                onChange={(e) => setSeason(parseInt(e.target.value || '2025', 10))}
+              />
+              <button
+                type="button"
+                className="season-button"
+                aria-label="Next season"
+                onClick={() => setSeason((s) => s + 1)}
+              >
+                +
+              </button>
+            </div>
           </div>
           <div className="week-glass" style={{ ['--week-progress' as string]: `${((week - 1) / 17) * 100}%` }}>
             <div className="week-glass-head">
