@@ -50,8 +50,12 @@ public class ProjectionsController {
             @PathVariable int season,
             @PathVariable int week,
             @PathVariable String leagueId,
-            @RequestParam(defaultValue = "ppr") String format
+            @RequestParam(defaultValue = "ppr") String format,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider
     ) {
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            return new LeagueProjectionsResponse(season, week, java.util.List.of());
+        }
         return matchupService.getLeagueProjections(season, week, leagueId, format);
     }
 }

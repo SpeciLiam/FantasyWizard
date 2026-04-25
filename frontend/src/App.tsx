@@ -8,11 +8,15 @@ import {
   Roster,
   LeaguePick,
   TeamRoster,
+  FantasyProvider,
   fetchLeagues,
   fetchRoster,
   fetchState,
   fetchLeaguePicks,
+  fetchLeagueUsers,
   fetchAllRosters,
+  fetchYahooAuthUrl,
+  fetchYahooStatus,
   sendAdvisorChat,
 } from './api';
 import { getLeagueUsers, getRosters } from './sleeper';
@@ -233,6 +237,11 @@ const TypingDots: React.FC = () => (
 
 export default function App() {
   const [tab, setTab] = useState<'roster' | 'matchups'>('roster');
+  const [provider, setProvider] = useState<FantasyProvider>('sleeper');
+  const [yahooStatus, setYahooStatus] = useState<{
+    configured: boolean;
+    connected: boolean;
+  } | null>(null);
   const [showManualTrade, setShowManualTrade] = useState(false);
   const [showAITrades, setShowAITrades] = useState(false);
   const [showPicksModal, setShowPicksModal] = useState(false);
@@ -253,6 +262,13 @@ export default function App() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (provider !== 'yahoo') return;
+    fetchYahooStatus()
+      .then(setYahooStatus)
+      .catch(() => setYahooStatus({ configured: false, connected: false }));
+  }, [provider]);
 
   const [leagues, setLeagues] = useState<Array<{ leagueId: string; name: string }>>([]);
   const [leagueId, setLeagueId] = useState<string | null>(null);
@@ -277,14 +293,14 @@ export default function App() {
     setUsers([]);
     setRoster(null);
     setMainError(null);
-    fetchLeagues(username, season)
+    fetchLeagues(username, season, provider)
       .then((ls) => {
         setLeagues(ls);
         setLeagueId(ls[0]?.leagueId ?? null);
       })
       .catch((e) => setMainError('Could not load leagues: ' + String(e)));
     // eslint-disable-next-line
-  }, [username, season]);
+  }, [username, season, provider]);
 
   useEffect(() => {
     if (!leagueId) {
@@ -299,16 +315,31 @@ export default function App() {
     setRoster(null);
     setErrorUsers(null);
     setLoadingUsers(true);
-    Promise.all([getLeagueUsers(leagueId), getRosters(leagueId)])
-      .then(([apiUsers, sleeperRosters]) => {
-        const mapped: LeagueUser[] = apiUsers.map((u) => ({
-          userId: u.user_id,
-          displayName: u.display_name,
-          avatarUrl: u.avatar
-            ? `https://sleepercdn.com/avatars/thumbs/${u.avatar}`
-            : undefined,
-          isMe: u.display_name?.toLowerCase() === username.toLowerCase(),
-        }));
+    const usersPromise =
+      provider === 'sleeper'
+        ? getLeagueUsers(leagueId).then((apiUsers) =>
+            apiUsers.map((u) => ({
+              userId: u.user_id,
+              displayName: u.display_name,
+              avatarUrl: u.avatar
+                ? `https://sleepercdn.com/avatars/thumbs/${u.avatar}`
+                : undefined,
+              isMe: u.display_name?.toLowerCase() === username.toLowerCase(),
+            }))
+          )
+        : fetchLeagueUsers(leagueId, provider, username).then((apiUsers) =>
+            apiUsers.map((u) => ({
+              userId: u.userId,
+              displayName: u.displayName,
+              avatarUrl: u.avatar,
+              isMe: u.isMe,
+            }))
+          );
+    const rostersPromise =
+      provider === 'sleeper' ? getRosters(leagueId) : Promise.resolve([]);
+
+    Promise.all([usersPromise, rostersPromise])
+      .then(([mapped, sleeperRosters]) => {
         const s: Record<string, Standing> = {};
         for (const r of sleeperRosters) {
           if (!r.owner_id) continue;
@@ -330,7 +361,7 @@ export default function App() {
       .catch((e) => setErrorUsers(e?.message ?? 'Failed to fetch users'))
       .finally(() => setLoadingUsers(false));
     // eslint-disable-next-line
-  }, [leagueId]);
+  }, [leagueId, provider, username]);
 
   useEffect(() => {
     if (!leagueId || !selectedUser) {
@@ -339,10 +370,10 @@ export default function App() {
     }
     setRoster(null);
     setMainError(null);
-    fetchRoster(leagueId, selectedUser.userId, week)
+    fetchRoster(leagueId, selectedUser.userId, week, provider)
       .then(setRoster)
       .catch((e) => setMainError('Could not load roster: ' + String(e)));
-  }, [leagueId, selectedUser, week]);
+  }, [leagueId, selectedUser, week, provider]);
 
   // Order: pin self to top, others by fpts desc
   const orderedUsers = useMemo(() => {
@@ -395,7 +426,7 @@ export default function App() {
         return;
       }
       try {
-        const url = `${API_BASE}/api/projections/${season}/${week}/league/${leagueId}?format=ppr`;
+        const url = `${API_BASE}/api/projections/${season}/${week}/league/${leagueId}?format=ppr&provider=${provider}`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error('Projections API error: ' + resp.status);
         const data = await resp.json();
@@ -408,7 +439,7 @@ export default function App() {
     return () => {
       ok = false;
     };
-  }, [leagueId, season, week]);
+  }, [leagueId, season, week, provider]);
 
   const orderedPairs = useMemo(() => {
     if (!selectedUser) return pairs;
@@ -447,10 +478,10 @@ export default function App() {
       setAllRosters([]);
       return;
     }
-    fetchAllRosters(leagueId, week)
+    fetchAllRosters(leagueId, week, provider)
       .then(setAllRosters)
       .catch(() => setAllRosters([]));
-  }, [leagueId, week]);
+  }, [leagueId, week, provider]);
 
   const [leaguePicks, setLeaguePicks] = useState<LeaguePick[]>([]);
   const [picksLoading, setPicksLoading] = useState(false);
@@ -460,11 +491,11 @@ export default function App() {
       return;
     }
     setPicksLoading(true);
-    fetchLeaguePicks(leagueId)
+    fetchLeaguePicks(leagueId, provider)
       .then((r) => setLeaguePicks(r.picks))
       .catch(() => setLeaguePicks([]))
       .finally(() => setPicksLoading(false));
-  }, [leagueId]);
+  }, [leagueId, provider]);
 
   const [rosProjections, setRosProjections] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -628,6 +659,21 @@ export default function App() {
   };
   const sendChat = () => sendChatWith(chatInput.trim());
 
+  const connectYahoo = async () => {
+    const authWindow = window.open('', '_blank');
+    try {
+      const url = await fetchYahooAuthUrl();
+      if (authWindow) {
+        authWindow.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    } catch (e: any) {
+      authWindow?.close();
+      setMainError(e?.message ?? 'Could not start Yahoo connection.');
+    }
+  };
+
   const myStanding = selectedUser ? standings[selectedUser.userId] : undefined;
   const myRank = selectedUser ? rankByUser[selectedUser.userId] : undefined;
   const formatStr = useMemo(() => {
@@ -666,9 +712,25 @@ export default function App() {
             <span className="star">✦</span>Fantasy
             <span className="accent">Wizard</span>
           </div>
+          <div className="field field-provider">
+            <span className="field-label">Provider</span>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as FantasyProvider)}
+            >
+              <option value="sleeper">Sleeper</option>
+              <option value="yahoo">Yahoo</option>
+            </select>
+          </div>
           <div className="field field-username">
-            <span className="field-label">User</span>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} />
+            <span className="field-label">
+              {provider === 'yahoo' ? 'Yahoo user' : 'User'}
+            </span>
+            <input
+              value={username}
+              disabled={provider === 'yahoo'}
+              onChange={(e) => setUsername(e.target.value)}
+            />
           </div>
           <div className="field field-season">
             <span className="field-label">Season</span>
@@ -705,6 +767,11 @@ export default function App() {
           <button className="tb-btn" onClick={() => setShowManualTrade(true)}>
             ⇄ Trade Builder
           </button>
+          {provider === 'yahoo' && (
+            <button className="tb-btn secondary" onClick={connectYahoo}>
+              {yahooStatus?.connected ? 'Yahoo Connected' : 'Connect Yahoo'}
+            </button>
+          )}
           <button className="tb-btn secondary" onClick={() => setShowAITrades(true)}>
             🤖 AI Trades
           </button>

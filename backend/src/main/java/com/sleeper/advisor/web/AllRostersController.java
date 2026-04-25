@@ -2,6 +2,7 @@ package com.sleeper.advisor.web;
 
 import com.sleeper.advisor.service.SleeperClient;
 import com.sleeper.advisor.service.ProjectionStore;
+import com.sleeper.advisor.service.YahooFantasyClient;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -13,10 +14,12 @@ public class AllRostersController {
 
     private final SleeperClient sleeperClient;
     private final ProjectionStore projectionStore;
+    private final YahooFantasyClient yahooFantasyClient;
 
-    public AllRostersController(SleeperClient sleeperClient, ProjectionStore projectionStore) {
+    public AllRostersController(SleeperClient sleeperClient, ProjectionStore projectionStore, YahooFantasyClient yahooFantasyClient) {
         this.sleeperClient = sleeperClient;
         this.projectionStore = projectionStore;
+        this.yahooFantasyClient = yahooFantasyClient;
     }
 
     /**
@@ -26,7 +29,12 @@ public class AllRostersController {
     @GetMapping("/{leagueId}/all-rosters")
     public List<Map<String, Object>> getAllRosters(
             @PathVariable String leagueId,
-            @RequestParam(required = false, defaultValue = "1") int week) {
+            @RequestParam(required = false, defaultValue = "1") int week,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider) {
+
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            return yahooFantasyClient.getAllRosters(leagueId, week);
+        }
 
         List<Map<String, Object>> rosters = sleeperClient.getLeagueRosters(leagueId);
         List<Map<String, Object>> users   = sleeperClient.getLeagueMembers(leagueId);

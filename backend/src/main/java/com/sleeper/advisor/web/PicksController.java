@@ -22,7 +22,15 @@ public class PicksController {
      * Returns all future draft picks with current ownership.
      */
     @GetMapping("/{leagueId}/picks")
-    public Map<String, Object> getAllPicks(@PathVariable String leagueId) {
+    public Map<String, Object> getAllPicks(
+            @PathVariable String leagueId,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider) {
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("managers", List.of());
+            empty.put("picks", List.of());
+            return empty;
+        }
         List<Map<String, Object>> rosters = sleeperClient.getLeagueRosters(leagueId);
         List<Map<String, Object>> users   = sleeperClient.getLeagueMembers(leagueId);
         List<Map<String, Object>> traded  = sleeperClient.getTradedPicks(leagueId);

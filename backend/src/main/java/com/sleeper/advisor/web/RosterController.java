@@ -1,6 +1,7 @@
 package com.sleeper.advisor.web;
 
 import com.sleeper.advisor.service.SleeperClient;
+import com.sleeper.advisor.service.YahooFantasyClient;
 import com.sleeper.advisor.service.ProjectionStore;
 import com.sleeper.advisor.model.Player;
 import com.sleeper.advisor.model.DraftPick;
@@ -20,23 +21,30 @@ public class RosterController {
 
     private final SleeperClient sleeperClient;
     private final ProjectionStore projectionStore;
+    private final YahooFantasyClient yahooFantasyClient;
 
-    public RosterController(SleeperClient sleeperClient, ProjectionStore projectionStore) {
+    public RosterController(SleeperClient sleeperClient, ProjectionStore projectionStore, YahooFantasyClient yahooFantasyClient) {
         this.sleeperClient = sleeperClient;
         this.projectionStore = projectionStore;
+        this.yahooFantasyClient = yahooFantasyClient;
     }
 
     @GetMapping("/{leagueId}/roster/{userId}")
     public Roster getRoster(
             @PathVariable String leagueId,
             @PathVariable String userId,
-            @RequestParam(required = false, defaultValue = "1") String weekStr) {
+            @RequestParam(required = false, defaultValue = "1") String weekStr,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider) {
 
         int week = 1;
         try { week = Integer.parseInt(weekStr); } catch (NumberFormatException ignored) {}
         if (week < 1) throw new IllegalArgumentException("Week must be >= 1.");
 
-        log.info("GET /api/league/{}/roster/{}?week={}", leagueId, userId, week);
+        log.info("GET /api/league/{}/roster/{}?week={}&provider={}", leagueId, userId, week, provider);
+
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            return yahooFantasyClient.getRoster(leagueId, userId, week);
+        }
 
         List<Map<String, Object>> rosters = sleeperClient.getLeagueRosters(leagueId);
         List<Map<String, Object>> users = sleeperClient.getLeagueMembers(leagueId);

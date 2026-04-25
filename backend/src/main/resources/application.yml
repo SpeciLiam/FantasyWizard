@@ -4,6 +4,11 @@ app:
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5.4-mini}
+  yahoo:
+    client-id: ${YAHOO_CLIENT_ID:}
+    client-secret: ${YAHOO_CLIENT_SECRET:}
+    redirect-uri: ${YAHOO_REDIRECT_URI:http://localhost:8080/api/yahoo/callback}
+    refresh-token: ${YAHOO_REFRESH_TOKEN:}
   cache:
     # playersMapTtlHours: 24
     # defaultTtlMinutes: 5

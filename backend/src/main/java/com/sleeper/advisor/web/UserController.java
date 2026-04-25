@@ -1,6 +1,7 @@
 package com.sleeper.advisor.web;
 
 import com.sleeper.advisor.service.SleeperClient;
+import com.sleeper.advisor.service.YahooFantasyClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
@@ -16,17 +17,24 @@ public class UserController {
     private static final Logger log = LoggerFactory.getLogger(UserController.class);
 
     private final SleeperClient sleeperClient;
+    private final YahooFantasyClient yahooFantasyClient;
 
-    public UserController(SleeperClient sleeperClient) {
+    public UserController(SleeperClient sleeperClient, YahooFantasyClient yahooFantasyClient) {
         this.sleeperClient = sleeperClient;
+        this.yahooFantasyClient = yahooFantasyClient;
     }
 
     @GetMapping("/{username}/leagues")
     public Map<String, Object> getUserLeagues(
             @PathVariable String username,
-            @RequestParam(required = false, defaultValue = "2025") String season) {
+            @RequestParam(required = false, defaultValue = "2025") String season,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider) {
 
-        log.info("GET /api/user/{}/leagues?season={}", username, season);
+        log.info("GET /api/user/{}/leagues?season={}&provider={}", username, season, provider);
+
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            return Map.of("leagues", yahooFantasyClient.getUserLeagues(season));
+        }
 
         String userId = sleeperClient.getUserId(username);
         if (userId == null) {

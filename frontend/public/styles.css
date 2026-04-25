@@ -98,6 +98,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   width: 100%;
   min-width: 60px;
 }
+.field input:disabled {
+  color: var(--fg3);
+  cursor: not-allowed;
+}
+.field-provider select { width: 86px; }
 .field-username input { width: 110px; }
 .field-season input { width: 56px; }
 .field-week select { width: 68px; }

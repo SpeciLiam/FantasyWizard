@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import com.sleeper.advisor.service.SleeperClient;
+import com.sleeper.advisor.service.YahooFantasyClient;
 import com.sleeper.advisor.model.LeagueUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,19 +25,25 @@ public class LeagueController {
 
     private final SleeperClient sleeperClient;
     private final MatchupService matchupService;
+    private final YahooFantasyClient yahooFantasyClient;
 
     @Autowired
-    public LeagueController(SleeperClient sleeperClient, MatchupService matchupService) {
+    public LeagueController(SleeperClient sleeperClient, MatchupService matchupService, YahooFantasyClient yahooFantasyClient) {
         this.sleeperClient = sleeperClient;
         this.matchupService = matchupService;
+        this.yahooFantasyClient = yahooFantasyClient;
     }
 
     @GetMapping("/{leagueId}/matchups/{week}")
     public com.sleeper.advisor.model.MatchupsResponse getMatchups(
             @PathVariable String leagueId,
-            @PathVariable int week
+            @PathVariable int week,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider
     ) {
-        log.info("API GET /api/league/{}/matchups/{}", leagueId, week);
+        log.info("API GET /api/league/{}/matchups/{}?provider={}", leagueId, week, provider);
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            return new com.sleeper.advisor.model.MatchupsResponse(leagueId, week, java.util.List.of());
+        }
         com.sleeper.advisor.model.MatchupsResponse resp = matchupService.getMatchups(leagueId, week);
         log.info("Returning matchups: {} pairs", resp.pairs().size());
         return resp;
@@ -45,9 +52,13 @@ public class LeagueController {
     @GetMapping("/{leagueId}/members")
     public List<LeagueUser> getLeagueMembers(
             @PathVariable String leagueId,
-            @RequestParam(required = false) String username
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false, defaultValue = "sleeper") String provider
     ) {
-        log.info("GET /api/league/{}/members?username={}", leagueId, username);
+        log.info("GET /api/league/{}/members?username={}&provider={}", leagueId, username, provider);
+        if ("yahoo".equalsIgnoreCase(provider)) {
+            return yahooFantasyClient.getLeagueMembers(leagueId, username);
+        }
         Object membersRaw = sleeperClient.getLeagueMembers(leagueId);
         List<LeagueUser> members = new ArrayList<>();
         if (membersRaw instanceof List) {
