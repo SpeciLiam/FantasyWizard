@@ -24,6 +24,27 @@ export type MatchupsResponse = {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 
+export type LeaguePick = {
+  season: number;
+  round: number;
+  originalOwnerName: string;
+  currentOwnerName: string;
+  currentUserId: string;
+  currentAvatar?: string;
+  traded: boolean;
+};
+
+export type LeaguePicksResponse = {
+  managers: { userId: string; displayName: string; avatar?: string }[];
+  picks: LeaguePick[];
+};
+
+export async function fetchLeaguePicks(leagueId: string): Promise<LeaguePicksResponse> {
+  const res = await fetch(`${API_BASE}/api/league/${leagueId}/picks`);
+  if (!res.ok) throw new Error(`Picks fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function sendAdvisorChat(
   message: string,
   history: { role: string; content: string }[],

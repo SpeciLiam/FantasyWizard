@@ -7,10 +7,13 @@ import {
   DraftPick,
   Roster,
   MatchupsResponse,
+  LeaguePick,
+  LeaguePicksResponse,
   fetchLeagues,
   fetchRoster,
   fetchMatchups,
   fetchState,
+  fetchLeaguePicks,
   sendAdvisorChat,
 } from './api';
 import {
@@ -148,7 +151,7 @@ const PickRow: React.FC<{ pick: DraftPick }> = ({ pick }) => {
 // ------ Main App ------
 export default function App() {
   // UI selection
-  const [tab, setTab] = useState<'roster' | 'matchups'>('roster');
+  const [tab, setTab] = useState<'roster' | 'matchups' | 'picks'>('roster');
 
   // Controls
   const [username, setUsername] = useState('SpeciLiam');
@@ -373,6 +376,18 @@ export default function App() {
     }
   };
 
+  // --- League picks ---
+  const [leaguePicks, setLeaguePicks] = useState<LeaguePick[]>([]);
+  const [picksLoading, setPicksLoading] = useState(false);
+  useEffect(() => {
+    if (tab !== 'picks' || !leagueId) return;
+    setPicksLoading(true);
+    fetchLeaguePicks(leagueId)
+      .then(r => setLeaguePicks(r.picks))
+      .catch(() => setLeaguePicks([]))
+      .finally(() => setPicksLoading(false));
+  }, [tab, leagueId]);
+
   // --- ROS projections cache ---
   const [rosProjections, setRosProjections] = useState<Record<string, number>>(
     {}
@@ -478,6 +493,16 @@ export default function App() {
             }}
           >
             Matchups
+          </button>
+          <button
+            className={`toggle${tab === 'picks' ? ' active' : ''}`}
+            onClick={() => setTab('picks')}
+            style={{
+              background: tab === 'picks' ? 'var(--accent)' : undefined,
+              color: tab === 'picks' ? 'white' : undefined,
+            }}
+          >
+            Draft Picks
           </button>
         </div>
       </div>
@@ -913,6 +938,78 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {tab === 'picks' && (
+            <div className="card">
+              <div className="title">League Draft Picks</div>
+              {picksLoading && <div className="small">Loading picks…</div>}
+              {!picksLoading && leaguePicks.length === 0 && (
+                <div className="small">No future picks found.</div>
+              )}
+              {!picksLoading && (() => {
+                const seasons = [...new Set(leaguePicks.map(p => p.season))].sort();
+                return seasons.map(season => {
+                  const rounds = [...new Set(leaguePicks.filter(p => p.season === season).map(p => p.round))].sort((a,b) => a-b);
+                  return (
+                    <div key={season} style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', marginBottom: 8, letterSpacing: '.04em' }}>
+                        {season} SEASON
+                      </div>
+                      {rounds.map(round => {
+                        const roundPicks = leaguePicks.filter(p => p.season === season && p.round === round);
+                        return (
+                          <div key={round} style={{ marginBottom: 10 }}>
+                            <div className="small" style={{ marginBottom: 4, fontWeight: 600, color: 'var(--muted)' }}>
+                              Round {round}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {roundPicks.map((pick, i) => {
+                                const isTraded = pick.traded;
+                                return (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      background: isTraded ? '#1a1200' : '#0f1a0f',
+                                      border: `1.5px solid ${isTraded ? '#b45309' : '#166534'}`,
+                                      borderRadius: 10,
+                                      padding: '6px 10px',
+                                      minWidth: 140,
+                                      flex: '1 1 140px',
+                                      maxWidth: 200,
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                                      {pick.currentAvatar && (
+                                        <img
+                                          src={pick.currentAvatar}
+                                          alt=""
+                                          style={{ width: 20, height: 20, borderRadius: 999, background: '#2b2d31' }}
+                                          onError={e => (e.currentTarget.style.display = 'none')}
+                                        />
+                                      )}
+                                      <strong style={{ fontSize: 13 }}>{pick.currentOwnerName}</strong>
+                                    </div>
+                                    {isTraded && (
+                                      <div className="small" style={{ color: '#f59e0b' }}>
+                                        via {pick.originalOwnerName}
+                                      </div>
+                                    )}
+                                    {!isTraded && (
+                                      <div className="small" style={{ color: '#4ade80' }}>own pick</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
 
           {/* RIGHT: Advisor Chat */}
           <div className="panel chat">
