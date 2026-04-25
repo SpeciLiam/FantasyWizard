@@ -105,7 +105,121 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .field-provider select { width: 86px; }
 .field-username input { width: 110px; }
 .field-season input { width: 56px; }
-.field-week select { width: 68px; }
+.week-glass {
+  position: relative;
+  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 520px;
+  padding: 7px 14px 8px;
+  border: 1px solid rgba(91,127,255,.28);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at var(--week-progress) 0%, rgba(63,207,142,.22), transparent 26%),
+    linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.025) 48%, rgba(91,127,255,.10));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.12),
+    inset 0 -1px 0 rgba(255,255,255,.04),
+    0 10px 30px rgba(0,0,0,.22),
+    0 0 0 1px rgba(255,255,255,.025);
+  backdrop-filter: blur(18px) saturate(145%);
+  overflow: hidden;
+}
+.week-glass::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 15px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+  opacity: .45;
+  pointer-events: none;
+}
+.week-glass-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+}
+.week-value {
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.week-slider-wrap {
+  position: relative;
+}
+.week-slider {
+  width: 100%;
+  height: 18px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+  display: block;
+}
+.week-slider:focus { outline: none; }
+.week-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--accent), var(--green)) 0 / var(--week-progress) 100% no-repeat,
+    rgba(255,255,255,.09);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.week-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 19px;
+  height: 19px;
+  margin-top: -6.5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.62);
+  background:
+    radial-gradient(circle at 35% 30%, #fff, rgba(255,255,255,.55) 22%, rgba(91,127,255,.8) 54%, var(--accent));
+  box-shadow:
+    0 0 0 5px rgba(91,127,255,.13),
+    0 0 22px rgba(91,127,255,.55),
+    0 5px 14px rgba(0,0,0,.38);
+}
+.week-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--accent), var(--green)) 0 / var(--week-progress) 100% no-repeat,
+    rgba(255,255,255,.09);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.week-slider::-moz-range-thumb {
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.62);
+  background: var(--accent);
+  box-shadow: 0 0 0 5px rgba(91,127,255,.13), 0 0 22px rgba(91,127,255,.55);
+}
+.week-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -1px;
+  padding: 0 1px;
+}
+.week-tick {
+  border: none;
+  background: transparent;
+  color: var(--fg3);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .15s, text-shadow .15s, transform .15s;
+}
+.week-tick:hover,
+.week-tick.active {
+  color: var(--fg);
+  text-shadow: 0 0 12px rgba(91,127,255,.8);
+  transform: translateY(-1px);
+}
 
 .spacer { flex: 1; }
 
@@ -892,3 +1006,15 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   margin-bottom: 12px;
 }
 .trade-suggestion-card:hover { border-color: var(--accent); }
+
+@media (max-width: 1040px) {
+  .topbar-row1 {
+    flex-wrap: wrap;
+  }
+
+  .week-glass {
+    order: 2;
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

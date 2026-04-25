@@ -740,15 +740,34 @@ export default function App() {
               onChange={(e) => setSeason(parseInt(e.target.value || '2025', 10))}
             />
           </div>
-          <div className="field field-week">
-            <span className="field-label">Week</span>
-            <select value={week} onChange={(e) => setWeek(parseInt(e.target.value, 10))}>
-              {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={w}>
-                  Week {w}
-                </option>
-              ))}
-            </select>
+          <div className="week-glass" style={{ ['--week-progress' as string]: `${((week - 1) / 17) * 100}%` }}>
+            <div className="week-glass-head">
+              <span className="field-label">Week</span>
+              <span className="week-value">Week {week}</span>
+            </div>
+            <div className="week-slider-wrap">
+              <input
+                className="week-slider"
+                type="range"
+                min="1"
+                max="18"
+                value={week}
+                aria-label="Select fantasy week"
+                onChange={(e) => setWeek(parseInt(e.target.value, 10))}
+              />
+              <div className="week-ticks" aria-hidden="true">
+                {[1, 5, 9, 13, 18].map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    className={`week-tick ${week === w ? 'active' : ''}`}
+                    onClick={() => setWeek(w)}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="spacer" />
