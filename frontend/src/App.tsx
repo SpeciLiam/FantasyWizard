@@ -65,6 +65,80 @@ function hueFromName(name: string): number {
   }
   return h;
 }
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanTeam(team?: string | null): string | undefined {
+  if (!team || team.toLowerCase() === 'null') return undefined;
+  return team;
+}
+
+function playerSearchTerms(player: Player): string[] {
+  const normalized = normalizeText(player.name);
+  const parts = normalized.split(' ').filter((part) => part.length > 1);
+  return [...new Set([normalized, ...parts, cleanTeam(player.team) ?? ''].filter(Boolean))];
+}
+
+function resolveMentionedPlayers(
+  text: string,
+  roster: Roster | null,
+  history: { role: 'user' | 'assistant'; text: string }[]
+): Player[] {
+  if (!roster) return [];
+  const players = [...roster.starters, ...roster.bench, ...roster.taxi];
+  const query = normalizeText(text);
+  const direct = players.filter((player) =>
+    playerSearchTerms(player).some((term) => query.includes(term))
+  );
+  if (direct.length) return direct;
+
+  const asksForSamePerson =
+    /\b(he|him|his|that|that guy|same player|recently|nowadays|doing|news|meant|mean)\b/i.test(text);
+  if (!asksForSamePerson) return [];
+
+  const recentUserText = history
+    .filter((message) => message.role === 'user')
+    .slice(-3)
+    .map((message) => message.text)
+    .join(' ');
+  const recent = normalizeText(recentUserText);
+  return players.filter((player) =>
+    playerSearchTerms(player).some((term) => recent.includes(term))
+  );
+}
+
+function inferConversationIntent(text: string): string {
+  if (/trade|swap|offer|deal|pick up|drop|sell|buy|acquire/i.test(text)) {
+    return 'trade / roster construction';
+  }
+  if (/start|sit|lineup|bench|flex|play|playing/i.test(text)) {
+    return 'start-sit / lineup';
+  }
+  if (/news|injur|report|update|espn|hurt|status|practice|limited|questionable|out|active|inactive|recent|recently|nowadays|doing|latest/i.test(text)) {
+    return 'player news / availability';
+  }
+  if (/matchup|opponent|facing|this week|projec|winning/i.test(text)) {
+    return 'weekly matchup';
+  }
+  if (/pick|draft pick|round|2026|2027|2028|dynasty/i.test(text)) {
+    return 'draft picks / dynasty value';
+  }
+  return 'general fantasy advice';
+}
+
+function isNewsQuestion(text: string, mentionedPlayers: Player[]): boolean {
+  if (/news|injur|report|update|espn|hurt|status|practice|limited|questionable|out|active|inactive|recent|recently|nowadays|doing|latest/i.test(text)) {
+    return true;
+  }
+  return mentionedPlayers.length > 0 && /\b(how|what|why|should|start|play|playing)\b/i.test(text);
+}
+
 const Avatar: React.FC<{ name: string; size?: 'sm' | 'lg' }> = ({
   name,
   size = 'sm',
@@ -99,6 +173,7 @@ const PlayerCard: React.FC<{
   rosProj?: number;
 }> = ({ p, role = 'starter', rosProj }) => {
   const color = posHex(p.pos);
+  const team = cleanTeam(p.team);
   return (
     <div className={`player-card ${role}`}>
       <div className="pos-accent" style={{ background: color }} />
@@ -108,7 +183,7 @@ const PlayerCard: React.FC<{
       <div className="player-main">
         <div className="player-name">{p.name}</div>
         <div className="player-meta">
-          {p.team && <span>{p.team}</span>}
+          {team && <span>{team}</span>}
           {typeof p.value === 'number' && (
             <span className="value-badge">val {p.value.toFixed(0)}</span>
           )}
@@ -314,9 +389,11 @@ export default function App() {
   const [expandedMatchup, setExpandedMatchup] = useState<string | null>(null);
   useEffect(() => {
     let ok = true;
-    if (tab !== 'matchups') return;
     (async () => {
-      if (!leagueId || !week || !season) return;
+      if (!leagueId || !week || !season) {
+        setPairs([]);
+        return;
+      }
       try {
         const url = `${API_BASE}/api/projections/${season}/${week}/league/${leagueId}?format=ppr`;
         const resp = await fetch(url);
@@ -331,7 +408,7 @@ export default function App() {
     return () => {
       ok = false;
     };
-  }, [leagueId, season, week, tab]);
+  }, [leagueId, season, week]);
 
   const orderedPairs = useMemo(() => {
     if (!selectedUser) return pairs;
@@ -345,6 +422,24 @@ export default function App() {
     arr.unshift(hit);
     return arr;
   }, [pairs, selectedUser]);
+
+  const selectedMatchup = useMemo(() => {
+    if (!selectedUser) return null;
+    return (
+      pairs.find(
+        (p) =>
+          p.home.userId === selectedUser.userId ||
+          p.away.userId === selectedUser.userId
+      ) ?? null
+    );
+  }, [pairs, selectedUser]);
+
+  const selectedOpponent = useMemo(() => {
+    if (!selectedUser || !selectedMatchup) return null;
+    return selectedMatchup.home.userId === selectedUser.userId
+      ? selectedMatchup.away
+      : selectedMatchup.home;
+  }, [selectedMatchup, selectedUser]);
 
   const [allRosters, setAllRosters] = useState<TeamRoster[]>([]);
   useEffect(() => {
@@ -385,18 +480,35 @@ export default function App() {
   const sendChatWith = async (text: string) => {
     if (!text || chatLoading) return;
     const history = chatLog.map((m) => ({ role: m.role, content: m.text }));
+    const mentionedPlayers = resolveMentionedPlayers(text, roster, chatLog);
+    const intent = inferConversationIntent(text);
     const q = text.toLowerCase();
     const isTrade = /trade|swap|offer|deal|pick up|drop|sell|buy|acquire/i.test(q);
-    const isNews = /news|injury|injur|report|update|espn|hurt|status/i.test(q);
+    const isNews = isNewsQuestion(text, mentionedPlayers);
     const isPicks = /pick|draft pick|round|2026|2027|dynasty/i.test(q);
     const isMatchup = /matchup|opponent|facing|this week|projec/i.test(q);
 
     const fmtPlayer = (p: Player) =>
-      `  - ${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''}${
+      `  - ${p.pos} ${p.name}${cleanTeam(p.team) ? ` (${cleanTeam(p.team)})` : ''}${
         typeof p.proj === 'number' ? ` — proj ${p.proj.toFixed(1)}` : ''
       }`;
 
     let context = '';
+    context += `Conversation intent: ${intent}\n`;
+    context += `User may ask casually, with typos, nicknames, pronouns, or follow-ups. Infer likely meaning from this context and recent chat history.\n`;
+    if (mentionedPlayers.length) {
+      context += `Likely referenced player(s): ${mentionedPlayers
+        .map((p) => `${p.name}${cleanTeam(p.team) ? ` (${cleanTeam(p.team)})` : ''}`)
+        .join(', ')}\n`;
+    } else {
+      context += `Likely referenced player(s): none resolved from current roster; answer from roster/context if possible and only ask a short clarifying question if truly necessary.\n`;
+    }
+    if (chatLog.length) {
+      context += `Recent conversation:\n${chatLog
+        .slice(-6)
+        .map((m) => `  ${m.role}: ${m.text.replace(/\s+/g, ' ').slice(0, 220)}`)
+        .join('\n')}\n`;
+    }
     if (selectedUser)
       context += `Your team: ${selectedUser.displayName} (Week ${week}, Season ${season})\n`;
     if (roster) {
@@ -420,7 +532,7 @@ export default function App() {
     if ((isTrade || isPicks || isMatchup) && allRosters.length > 0) {
       context += `\n--- ALL LEAGUE ROSTERS ---\n`;
       const fmtP = (p: { pos: string; name: string; team: string; proj: number }) =>
-        `${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''} ${p.proj.toFixed(1)}pts`;
+        `${p.pos} ${p.name}${cleanTeam(p.team) ? ` (${cleanTeam(p.team)})` : ''} ${p.proj.toFixed(1)}pts`;
       for (const team of allRosters) {
         const isMe = team.userId === selectedUser?.userId;
         context += `\n${team.displayName}${isMe ? ' (YOU)' : ''}:\n`;
@@ -438,23 +550,61 @@ export default function App() {
           fetch(`${API_BASE}/api/espn/injuries`),
           fetch(`${API_BASE}/api/espn/news`),
         ]);
+        const targetTerms = [
+          ...new Set(mentionedPlayers.flatMap(playerSearchTerms).map(normalizeText)),
+        ].filter((term) => term.length > 1);
+
+        if (mentionedPlayers.length) {
+          context += `\n--- NEWS TARGET PLAYER(S) ---\n${mentionedPlayers
+            .map((p) => `  - ${p.name}${cleanTeam(p.team) ? ` (${cleanTeam(p.team)})` : ''}`)
+            .join('\n')}\n`;
+        }
+
         if (injRes.ok) {
           const inj: Record<string, string> = await injRes.json();
-          const relevant = Object.entries(inj)
-            .filter(([name]) => q.includes(name.split(' ').pop()?.toLowerCase() ?? ''))
-            .slice(0, 20);
+          const relevant = targetTerms.length
+            ? Object.entries(inj).filter(([name]) => {
+                const normalizedName = normalizeText(name);
+                return targetTerms.some(
+                  (term) =>
+                    normalizedName === term ||
+                    normalizedName.includes(term) ||
+                    term.includes(normalizedName)
+                );
+              })
+            : [];
           const all = relevant.length ? relevant : Object.entries(inj).slice(0, 30);
           context += `\n--- ESPN INJURY REPORT ---\n${all
             .map(([n, s]) => `  ${n}: ${s}`)
             .join('\n')}\n`;
+          if (targetTerms.length && !relevant.length) {
+            context += `No ESPN injury entry matched the target player names above.\n`;
+          }
         }
         if (newsRes.ok) {
           const news: { headline: string; description: string; published: string }[] =
             await newsRes.json();
-          context += `\n--- ESPN NFL NEWS (latest) ---\n${news
+          const relevantNews = targetTerms.length
+            ? news.filter((article) => {
+                const haystack = normalizeText(
+                  `${article.headline} ${article.description ?? ''}`
+                );
+                return targetTerms.some((term) => haystack.includes(term));
+              })
+            : [];
+          const selectedNews = relevantNews.length ? relevantNews : news.slice(0, 8);
+          context += `\n--- ESPN NFL NEWS (${relevantNews.length ? 'matched' : 'latest'}) ---\n${selectedNews
             .slice(0, 8)
-            .map((a) => `  • ${a.headline}`)
+            .map(
+              (a) =>
+                `  - ${a.headline}${a.description ? ` — ${a.description}` : ''}${
+                  a.published ? ` (${a.published})` : ''
+                }`
+            )
             .join('\n')}\n`;
+          if (targetTerms.length && !relevantNews.length) {
+            context += `No ESPN news headline or description matched the target player names above.\n`;
+          }
         }
       } catch {
         /* best-effort */
@@ -495,7 +645,7 @@ export default function App() {
       if (!k) continue;
       (byPos[k] ??= []).push(p);
     }
-    const order = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+    const order = ['QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
     return order
       .filter((pos) => byPos[pos]?.length)
       .map((pos) => {
@@ -693,11 +843,16 @@ export default function App() {
                 <div className="team-header-right">
                   <div className="label">Week {week}</div>
                   <div className="value">
+                    {selectedOpponent
+                      ? `vs ${nameOf(selectedOpponent.userId)}`
+                      : 'opponent —'}
+                  </div>
+                  <div className="subvalue">
                     {roster?.starters?.length
-                      ? roster.starters
+                      ? `${roster.starters
                           .reduce((a, p) => a + (p.proj ?? 0), 0)
-                          .toFixed(1) + ' proj'
-                      : '—'}
+                          .toFixed(1)} proj`
+                      : '— proj'}
                   </div>
                 </div>
               </div>
@@ -1132,7 +1287,10 @@ function buildLeagueContext(
     ctx += `\n${team.displayName}:\n`;
     if (team.starters.length)
       ctx += `  Starters: ${team.starters
-        .map((p) => `${p.pos} ${p.name} (${p.team}) ${p.proj.toFixed(1)}pts`)
+        .map(
+          (p) =>
+            `${p.pos} ${p.name}${cleanTeam(p.team) ? ` (${cleanTeam(p.team)})` : ''} ${p.proj.toFixed(1)}pts`
+        )
         .join(' | ')}\n`;
     if (team.bench.length)
       ctx += `  Bench: ${team.bench.map((p) => `${p.pos} ${p.name}`).join(', ')}\n`;
