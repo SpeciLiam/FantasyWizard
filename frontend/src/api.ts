@@ -70,7 +70,16 @@ export async function sendAdvisorChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history, context }),
   });
-  if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
+  if (!res.ok) {
+    let message = `Chat failed: ${res.status}`;
+    try {
+      const errorBody = await res.json();
+      if (errorBody?.message) message = errorBody.message;
+    } catch {
+      /* keep status fallback */
+    }
+    throw new Error(message);
+  }
   const data = await res.json();
   return data.reply as string;
 }

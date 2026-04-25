@@ -1,6 +1,7 @@
 package com.sleeper.advisor.web;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.HttpClientErrorException;
@@ -25,6 +26,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of(
             "error", "Bad request",
             "message", ex.getMessage()
+        ));
+    }
+
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<Map<String, Object>> handleRateLimit(RateLimitException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
+            "error", "Rate limit reached",
+            "message", ex.getMessage(),
+            "limit", ex.limit(),
+            "remaining", ex.remaining()
         ));
     }
 
