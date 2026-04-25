@@ -39,6 +39,20 @@ export type LeaguePicksResponse = {
   picks: LeaguePick[];
 };
 
+export type TeamRoster = {
+  displayName: string;
+  userId: string;
+  starters: { id: string; name: string; pos: string; team: string; proj: number }[];
+  bench: { id: string; name: string; pos: string; team: string; proj: number }[];
+  taxi: { id: string; name: string; pos: string; team: string; proj: number }[];
+};
+
+export async function fetchAllRosters(leagueId: string, week: number): Promise<TeamRoster[]> {
+  const res = await fetch(`${API_BASE}/api/league/${leagueId}/all-rosters?week=${week}`);
+  if (!res.ok) throw new Error(`All rosters fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchLeaguePicks(leagueId: string): Promise<LeaguePicksResponse> {
   const res = await fetch(`${API_BASE}/api/league/${leagueId}/picks`);
   if (!res.ok) throw new Error(`Picks fetch failed: ${res.status}`);

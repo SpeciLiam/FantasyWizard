@@ -9,11 +9,13 @@ import {
   MatchupsResponse,
   LeaguePick,
   LeaguePicksResponse,
+  TeamRoster,
   fetchLeagues,
   fetchRoster,
   fetchMatchups,
   fetchState,
   fetchLeaguePicks,
+  fetchAllRosters,
   sendAdvisorChat,
 } from './api';
 import {
@@ -155,7 +157,7 @@ export default function App() {
 
   // Controls
   const [username, setUsername] = useState('SpeciLiam');
-  const [season, setSeason] = useState<number>(2025);
+  const [season, setSeason] = useState<number>(new Date().getFullYear());
   const [week, setWeek] = useState<number>(1);
 
   // On mount: fetch state and update week/season if available
@@ -360,6 +362,26 @@ export default function App() {
       }
     }
 
+    // Add all other teams' rosters so AI knows the full league
+    if (allRosters.length > 0) {
+      context += `\n--- ALL LEAGUE ROSTERS (Week ${week} projections) ---\n`;
+      for (const team of allRosters) {
+        const isMe = team.userId === selectedUser?.userId;
+        context += `\n${team.displayName}${isMe ? ' (YOU)' : ''}:\n`;
+        const fmtP = (p: { pos: string; name: string; team: string; proj: number }) =>
+          `  ${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''} — proj ${p.proj.toFixed(1)}`;
+        if (team.starters.length) {
+          context += `  Starters: ${team.starters.map(fmtP).join(' | ')}\n`;
+        }
+        if (team.bench.length) {
+          context += `  Bench: ${team.bench.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+        }
+        if (team.taxi.length) {
+          context += `  Taxi: ${team.taxi.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+        }
+      }
+    }
+
     setChatLog((prev) => [...prev, { role: 'user', text }]);
     setChatInput('');
     setChatLoading(true);
@@ -375,6 +397,15 @@ export default function App() {
       setChatLoading(false);
     }
   };
+
+  // --- All league rosters (for advisor context) ---
+  const [allRosters, setAllRosters] = useState<TeamRoster[]>([]);
+  useEffect(() => {
+    if (!leagueId) { setAllRosters([]); return; }
+    fetchAllRosters(leagueId, week)
+      .then(setAllRosters)
+      .catch(() => setAllRosters([]));
+  }, [leagueId, week]);
 
   // --- League picks ---
   const [leaguePicks, setLeaguePicks] = useState<LeaguePick[]>([]);
