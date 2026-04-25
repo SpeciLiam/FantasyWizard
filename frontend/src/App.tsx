@@ -281,6 +281,7 @@ export default function App() {
   const [selectedUser, setSelectedUser] = useState<LeagueUser | null>(null);
   const [roster, setRoster] = useState<Roster | null>(null);
   const [mainError, setMainError] = useState<string | null>(null);
+  const [rosterError, setRosterError] = useState<string | null>(null);
 
   const [chatInput, setChatInput] = useState('');
   const [chatLog, setChatLog] = useState<
@@ -315,6 +316,7 @@ export default function App() {
     setUsers([]);
     setRoster(null);
     setMainError(null);
+    setRosterError(null);
     fetchLeagues(username, season, provider)
       .then((ls) => {
         setLeagues(ls);
@@ -329,12 +331,14 @@ export default function App() {
       setUsers([]);
       setSelectedUser(null);
       setRoster(null);
+      setRosterError(null);
       setStandings({});
       return;
     }
     setUsers([]);
     setSelectedUser(null);
     setRoster(null);
+    setRosterError(null);
     setErrorUsers(null);
     setLoadingUsers(true);
     const usersPromise =
@@ -388,13 +392,19 @@ export default function App() {
   useEffect(() => {
     if (!leagueId || !selectedUser) {
       setRoster(null);
+      setRosterError(null);
       return;
     }
     setRoster(null);
-    setMainError(null);
+    setRosterError(null);
     fetchRoster(leagueId, selectedUser.userId, week, provider)
       .then(setRoster)
-      .catch((e) => setMainError('Could not load roster: ' + String(e)));
+      .catch((e) => {
+        setRoster(null);
+        setRosterError(
+          `Could not load ${provider} roster for ${selectedUser.displayName}. You can still change provider, league, week, or team. ${String(e)}`
+        );
+      });
   }, [leagueId, selectedUser, week, provider]);
 
   // Order: pin self to top, others by fpts desc
@@ -750,7 +760,7 @@ export default function App() {
             </span>
             <input
               value={username}
-              disabled={provider === 'yahoo'}
+              placeholder={provider === 'yahoo' ? 'optional display name' : 'Sleeper username'}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
@@ -922,8 +932,19 @@ export default function App() {
               {mainError}
             </div>
           )}
+          {rosterError && (
+            <div className="soft-error">
+              <div className="soft-error-title">Roster unavailable</div>
+              <div>{rosterError}</div>
+              {provider === 'yahoo' && (
+                <button className="soft-error-action" onClick={connectYahoo}>
+                  Reconnect Yahoo
+                </button>
+              )}
+            </div>
+          )}
 
-          {tab === 'roster' && selectedUser && (
+          {tab === 'roster' && selectedUser && !rosterError && (
             <>
               <div className="team-header">
                 <Avatar name={selectedUser.displayName} size="lg" />
