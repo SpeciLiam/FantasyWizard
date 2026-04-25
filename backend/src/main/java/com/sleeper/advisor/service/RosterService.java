@@ -128,9 +128,10 @@ public class RosterService {
                     picks.add(new DraftPick(
                         Integer.parseInt(e.getKey()), // season
                         round,
-                        e.getKey(), // originalOwner
+                        e.getKey(), // originalOwner userId
+                        null,       // originalOwnerName (not resolved here)
                         userId,
-                        false // traded? skip for simplicity
+                        false
                     ));
                 }
             }

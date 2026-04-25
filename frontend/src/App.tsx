@@ -127,21 +127,23 @@ const PlayerCardDetailed: React.FC<{
   );
 };
 
-const PickRow: React.FC<{ pick: DraftPick }> = ({ pick }) => (
-  <Row alt>
-    <div>
-      <strong>
-        {pick.season} — Round {pick.round}
-      </strong>
-    </div>
-    <div className="small">
-      {pick.owner === pick.originalOwner
-        ? 'Own'
-        : `Via ${pick.originalOwner ?? '?'}`}
-      {pick.traded ? ' • traded' : ''}
-    </div>
-  </Row>
-);
+const PickRow: React.FC<{ pick: DraftPick }> = ({ pick }) => {
+  const isOwn = !pick.traded;
+  const label = isOwn
+    ? 'Own pick'
+    : `via ${pick.originalOwnerName ?? pick.originalOwner ?? '?'}`;
+  return (
+    <Row alt>
+      <div>
+        <strong>{pick.season} — Round {pick.round}</strong>
+        <span className="small" style={{ marginLeft: 8, color: isOwn ? '#22c55e' : '#f59e0b' }}>
+          {label}
+        </span>
+      </div>
+      {pick.traded && <span className="badge" style={{ background: '#2d1f00', color: '#f59e0b' }}>traded</span>}
+    </Row>
+  );
+};
 
 // ------ Main App ------
 export default function App() {
@@ -342,9 +344,16 @@ export default function App() {
         context += `Taxi:\n${roster.taxi.map(fmt).join('\n')}\n`;
       }
       if (roster.picks?.length) {
-        context += `Draft picks: ${roster.picks
-          .map((p) => `${p.season} R${p.round}${p.traded ? ' (traded)' : ''}`)
-          .join(', ')}\n`;
+        context += `Draft picks owned:\n${roster.picks
+          .map((p) => {
+            const src = p.traded
+              ? ` (via ${p.originalOwnerName ?? p.originalOwner ?? '?'})`
+              : ' (own)';
+            return `  - ${p.season} Round ${p.round}${src}`;
+          })
+          .join('\n')}\n`;
+      } else {
+        context += `Draft picks owned: none\n`;
       }
     }
 

@@ -1,6 +1,6 @@
 export type LeagueUser = { userId: string; displayName: string; avatar?: string; isMe?: boolean };
 export type Player = { id: string; name: string; pos: string; team?: string; proj?: number; value?: number };
-export type DraftPick = { season: number; round: number; originalOwner?: string; owner?: string; traded?: boolean };
+export type DraftPick = { season: number; round: number; originalOwner?: string; originalOwnerName?: string; owner?: string; traded?: boolean };
 export type Roster = { starters: Player[]; bench: Player[]; taxi: Player[]; picks?: DraftPick[] };
 
 export type MatchupTeam = {

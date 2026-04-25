@@ -39,10 +39,27 @@ public class RosterController {
         log.info("GET /api/league/{}/roster/{}?week={}", leagueId, userId, week);
 
         List<Map<String, Object>> rosters = sleeperClient.getLeagueRosters(leagueId);
+        List<Map<String, Object>> users = sleeperClient.getLeagueMembers(leagueId);
+
+        // roster_id -> user_id, user_id -> display_name
+        Map<Integer, String> rosterIdToUserId = new HashMap<>();
+        for (Map<String, Object> r : rosters) {
+            Integer rid = intOrNull(r.get("roster_id"));
+            String uid = r.get("owner_id") != null ? r.get("owner_id").toString() : null;
+            if (rid != null && uid != null) rosterIdToUserId.put(rid, uid);
+        }
+        Map<String, String> userIdToName = new HashMap<>();
+        for (Map<String, Object> u : users) {
+            String uid = u.get("user_id") != null ? u.get("user_id").toString() : null;
+            String name = u.get("display_name") != null ? u.get("display_name").toString() : null;
+            if (uid != null && name != null) userIdToName.put(uid, name);
+        }
+
         Map<String, Object> myRoster = rosters.stream()
                 .filter(r -> Objects.equals(r.get("owner_id"), userId))
                 .findFirst()
                 .orElse(Collections.emptyMap());
+        Integer myRosterId = intOrNull(myRoster.get("roster_id"));
 
         List<String> startersIds = toStringList(myRoster.get("starters"));
         List<String> allPlayerIds = toStringList(myRoster.get("players"));
@@ -55,7 +72,6 @@ public class RosterController {
 
         Map<String, Map<String, Object>> playersMap = sleeperClient.getPlayersMap();
 
-        // Fetch real Sleeper projections for the requested week
         Map<String, Object> state = sleeperClient.getNflState();
         int season = state.get("season") instanceof Number n
                 ? n.intValue()
@@ -64,40 +80,66 @@ public class RosterController {
 
         List<Player> starters = startersIds.stream()
                 .map(pid -> playerFromMap(pid, playersMap.get(pid), weekProjections))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .filter(Objects::nonNull).collect(Collectors.toList());
         List<Player> bench = benchIds.stream()
                 .map(pid -> playerFromMap(pid, playersMap.get(pid), weekProjections))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .filter(Objects::nonNull).collect(Collectors.toList());
         List<Player> taxi = taxiIds.stream()
                 .map(pid -> playerFromMap(pid, playersMap.get(pid), weekProjections))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .filter(Objects::nonNull).collect(Collectors.toList());
 
-        // Picks: include the user's own draft_picks (default ownership) plus
-        // any traded picks where current owner_id == userId
-        List<DraftPick> picks = new ArrayList<>();
-        Object ownDraftPicks = myRoster.get("draft_picks");
-        if (ownDraftPicks instanceof List<?> ownList) {
-            for (Object o : ownList) {
-                if (o instanceof Map<?, ?> p) {
-                    int s = intOrElse(p.get("season"), 0);
-                    int r = intOrElse(p.get("round"), 0);
-                    if (s == 0 || r == 0) continue;
-                    picks.add(new DraftPick(s, r, userId, userId, false));
-                }
+        // ---- Draft picks ----
+        // Start with all of this roster's default picks (one per round per future season),
+        // then apply traded_picks history to determine final ownership.
+        List<Map<String, Object>> traded = sleeperClient.getTradedPicks(leagueId);
+
+        // Map: (season, round, originalRosterId) -> currentOwnerRosterId
+        // Default ownership: original roster owns it.
+        // Apply trades by overwriting current owner.
+        Map<String, Integer> finalOwners = new LinkedHashMap<>();
+        Map<String, int[]> seasonRoundOriginal = new LinkedHashMap<>();
+
+        // Seed from each roster's draft_picks (default ownership)
+        for (Map<String, Object> r : rosters) {
+            Integer originalRid = intOrNull(r.get("roster_id"));
+            Object dp = r.get("draft_picks");
+            if (originalRid == null || !(dp instanceof List<?> list)) continue;
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> p)) continue;
+                int s = intOrElse(p.get("season"), 0);
+                int rd = intOrElse(p.get("round"), 0);
+                if (s == 0 || rd == 0) continue;
+                String key = s + ":" + rd + ":" + originalRid;
+                finalOwners.put(key, originalRid);
+                seasonRoundOriginal.put(key, new int[]{s, rd, originalRid});
             }
         }
-        List<Map<String, Object>> traded = sleeperClient.getTradedPicks(leagueId);
-        for (Map<String, Object> pick : traded) {
-            if (Objects.equals(pick.get("owner_id"), userId)) {
-                int s = intOrElse(pick.get("season"), 0);
-                int r = intOrElse(pick.get("round"), 0);
-                if (s == 0 || r == 0) continue;
-                String orig = pick.get("previous_owner_id") != null ? pick.get("previous_owner_id").toString() : null;
-                picks.add(new DraftPick(s, r, orig, userId, !Objects.equals(orig, userId)));
+        // Apply traded picks: owner_id is current holder (roster_id), roster_id is original
+        for (Map<String, Object> t : traded) {
+            int s = intOrElse(t.get("season"), 0);
+            int rd = intOrElse(t.get("round"), 0);
+            Integer originalRid = intOrNull(t.get("roster_id"));
+            Integer currentRid = intOrNull(t.get("owner_id"));
+            if (s == 0 || rd == 0 || originalRid == null || currentRid == null) continue;
+            String key = s + ":" + rd + ":" + originalRid;
+            finalOwners.put(key, currentRid);
+            seasonRoundOriginal.putIfAbsent(key, new int[]{s, rd, originalRid});
+        }
+
+        List<DraftPick> picks = new ArrayList<>();
+        if (myRosterId != null) {
+            for (var e : finalOwners.entrySet()) {
+                if (!Objects.equals(e.getValue(), myRosterId)) continue;
+                int[] sro = seasonRoundOriginal.get(e.getKey());
+                if (sro == null) continue;
+                int s = sro[0], rd = sro[1], originalRid = sro[2];
+                String origUserId = rosterIdToUserId.get(originalRid);
+                String origName = origUserId != null ? userIdToName.get(origUserId) : null;
+                if (origName == null) origName = "Roster " + originalRid;
+                boolean wasTraded = !Objects.equals(originalRid, myRosterId);
+                picks.add(new DraftPick(s, rd, origUserId, origName, userId, wasTraded));
             }
+            picks.sort(Comparator.<DraftPick>comparingInt(DraftPick::season).thenComparingInt(DraftPick::round));
         }
 
         return new Roster(starters, bench, taxi, picks);
@@ -125,9 +167,13 @@ public class RosterController {
     }
 
     private int intOrElse(Object obj, int defVal) {
-        if (obj == null) return defVal;
+        Integer v = intOrNull(obj);
+        return v != null ? v : defVal;
+    }
+
+    private static Integer intOrNull(Object obj) {
+        if (obj == null) return null;
         if (obj instanceof Number n) return n.intValue();
-        try { return Integer.parseInt(obj.toString()); } catch (Exception ignored) {}
-        return defVal;
+        try { return Integer.parseInt(obj.toString()); } catch (Exception ignored) { return null; }
     }
 }
