@@ -178,6 +178,23 @@ public class SleeperClient {
         }
     }
 
+    // Returns league settings (draft_rounds, etc.)
+    @Cacheable(cacheNames = "leagueUsers", key = "'info:' + #leagueId")
+    public Map<String,Object> getLeagueInfo(String leagueId) {
+        String endpoint = BASE_URL + "/v1/league/" + leagueId;
+        try {
+            Object resp = restTemplate.getForObject(endpoint, Object.class);
+            if (resp instanceof Map<?,?> m) {
+                Map<String,Object> out = new HashMap<>();
+                m.forEach((k,v) -> out.put(k.toString(), v));
+                return out;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch league info for {}: {}", leagueId, e.getMessage());
+        }
+        return Map.of();
+    }
+
     @Cacheable(cacheNames = "nflState", key = "'state'")
     public Map<String,Object> getNflState() {
         String url = "https://api.sleeper.app/v1/state/nfl";
