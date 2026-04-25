@@ -756,7 +756,7 @@ export default function App() {
                 onChange={(e) => setWeek(parseInt(e.target.value, 10))}
               />
               <div className="week-ticks" aria-hidden="true">
-                {[1, 5, 9, 13, 18].map((w) => (
+                {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
                   <button
                     key={w}
                     type="button"
