@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import { ManualTradeModal, AITradesModal } from './TradeModal';
@@ -242,6 +242,7 @@ export default function App() {
     configured: boolean;
     connected: boolean;
   } | null>(null);
+  const topbarRef = useRef<HTMLDivElement | null>(null);
   const [showManualTrade, setShowManualTrade] = useState(false);
   const [showAITrades, setShowAITrades] = useState(false);
   const [showPicksModal, setShowPicksModal] = useState(false);
@@ -286,6 +287,27 @@ export default function App() {
     { role: 'user' | 'assistant'; text: string }[]
   >([]);
   const [chatLoading, setChatLoading] = useState(false);
+
+  useLayoutEffect(() => {
+    const topbar = topbarRef.current;
+    if (!topbar) return;
+
+    const updateTopbarHeight = () => {
+      document.documentElement.style.setProperty(
+        '--topbar-height',
+        `${topbar.offsetHeight}px`
+      );
+    };
+
+    updateTopbarHeight();
+    const observer = new ResizeObserver(updateTopbarHeight);
+    observer.observe(topbar);
+    window.addEventListener('resize', updateTopbarHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateTopbarHeight);
+    };
+  }, []);
 
   useEffect(() => {
     setLeagues([]);
@@ -706,7 +728,7 @@ export default function App() {
 
   return (
     <>
-      <div className="topbar">
+      <div className="topbar" ref={topbarRef}>
         <div className="topbar-row1">
           <div className="brand">
             <span className="star">✦</span>Fantasy

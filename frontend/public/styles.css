@@ -33,6 +33,11 @@ body {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 button, input, select { font-family: inherit; }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 
@@ -52,6 +57,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 /* ── Top bar (2-row) ── */
 .topbar {
   position: sticky; top: 0; z-index: 20;
+  flex: 0 0 auto;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -300,18 +306,26 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .board {
   display: grid;
   grid-template-columns: 260px 1fr 320px;
-  height: calc(100vh - 88px);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .col-left, .col-right {
   display: flex; flex-direction: column;
   padding: 14px;
   overflow: hidden;
+  min-height: 0;
 }
 .col-left { border-right: 1px solid var(--border); }
-.col-right { border-left: 1px solid var(--border); }
+.col-right {
+  position: sticky;
+  top: var(--topbar-height, 0px);
+  height: calc(100vh - var(--topbar-height, 0px));
+  border-left: 1px solid var(--border);
+}
 .col-center {
   padding: 16px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 /* ── Left column: search + standings ── */
@@ -831,6 +845,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 
 .quick-chips {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
@@ -853,7 +868,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 
 .chatlog {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -907,6 +923,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .typing-dot:nth-child(3) { animation-delay: .3s; }
 
 .chatin {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   margin-top: 10px;
