@@ -210,6 +210,70 @@ body{
 }
 .chatin .button:disabled{ opacity: .5; cursor: not-allowed; }
 
+/* ── Modals ── */
+.modal-overlay{
+  position:fixed; inset:0; z-index:100;
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  padding: 20px;
+}
+.modal{
+  background: #18191e;
+  border: 1px solid #2e3038;
+  border-radius: 18px;
+  padding: 20px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+}
+.modal-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2e3038;
+}
+.modal-close{
+  background: transparent; border: none; color: #888;
+  font-size: 18px; cursor: pointer; padding: 2px 6px;
+  border-radius: 6px;
+}
+.modal-close:hover{ background:#2e3038; color:#fff; }
+
+.trade-side-label{
+  font-size: 10px; text-transform: uppercase; letter-spacing:.08em;
+  font-weight: 700; margin-bottom: 6px; padding: 3px 8px;
+  border-radius: 6px; display: inline-block;
+}
+.trade-side-label.give   { background:#2a0f0f; color:#ef4444; }
+.trade-side-label.receive{ background:#0f2a0f; color:#22c55e; }
+
+.trade-suggestion-card{
+  background: #1c1d24;
+  border: 1px solid #2e3038;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.trade-suggestion-card:hover{ border-color: #3b82f6; }
+
+/* ── Trade buttons in topbar ── */
+.trade-btn{
+  display:inline-flex; align-items:center; gap:6px;
+  padding: 8px 14px; border-radius: 12px; cursor: pointer;
+  font-size: 13px; font-weight: 600; border: 1.5px solid;
+  transition: all .12s;
+}
+.trade-btn.manual{
+  background: #0f1e2a; border-color: #1d4ed8; color: #60a5fa;
+}
+.trade-btn.manual:hover{ background:#1d4ed8; color:#fff; }
+.trade-btn.ai{
+  background: #1a0f2a; border-color: #7c3aed; color: #a78bfa;
+}
+.trade-btn.ai:hover{ background:#7c3aed; color:#fff; }
+
 /* small helpers */
 .small{ color: var(--muted); font-size: 12px; }
 .badge{

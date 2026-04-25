@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
+import { ManualTradeModal, AITradesModal } from './TradeModal';
 
 import {
   Player,
@@ -154,6 +155,8 @@ const PickRow: React.FC<{ pick: DraftPick }> = ({ pick }) => {
 export default function App() {
   // UI selection
   const [tab, setTab] = useState<'roster' | 'matchups' | 'picks'>('roster');
+  const [showManualTrade, setShowManualTrade] = useState(false);
+  const [showAITrades, setShowAITrades] = useState(false);
 
   // Controls
   const [username, setUsername] = useState('SpeciLiam');
@@ -522,6 +525,15 @@ export default function App() {
             </option>
           ))}
         </select>
+
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="trade-btn manual" onClick={() => setShowManualTrade(true)}>
+            🔄 Build Trade
+          </button>
+          <button className="trade-btn ai" onClick={() => setShowAITrades(true)}>
+            🤖 AI Trades
+          </button>
+        </div>
 
         <div style={{ display: 'flex', gap: 6 }}>
           <button
@@ -1116,8 +1128,37 @@ export default function App() {
           </div>
         </div>
       </div>
+      {showManualTrade && selectedUser && roster && (
+        <ManualTradeModal
+          myTeam={selectedUser.displayName}
+          myRoster={roster}
+          myPicks={roster.picks ?? []}
+          allRosters={allRosters}
+          leagueContext={buildLeagueContext(allRosters, week, season)}
+          onClose={() => setShowManualTrade(false)}
+        />
+      )}
+      {showAITrades && selectedUser && (
+        <AITradesModal
+          myTeam={selectedUser.displayName}
+          leagueContext={buildLeagueContext(allRosters, week, season)}
+          onClose={() => setShowAITrades(false)}
+        />
+      )}
     </>
   );
+}
+
+function buildLeagueContext(allRosters: import('./api').TeamRoster[], week: number, season: number): string {
+  if (!allRosters.length) return '';
+  let ctx = `PPR Dynasty league, Week ${week}, Season ${season}\n\n--- ALL ROSTERS ---\n`;
+  for (const team of allRosters) {
+    ctx += `\n${team.displayName}:\n`;
+    if (team.starters.length) ctx += `  Starters: ${team.starters.map(p => `${p.pos} ${p.name} (${p.team}) ${p.proj.toFixed(1)}pts`).join(' | ')}\n`;
+    if (team.bench.length)    ctx += `  Bench: ${team.bench.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+    if (team.taxi.length)     ctx += `  Taxi: ${team.taxi.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+  }
+  return ctx;
 }
 
 const rootElement = document.getElementById('root');
