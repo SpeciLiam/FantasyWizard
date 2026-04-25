@@ -331,55 +331,74 @@ export default function App() {
     if (!text || chatLoading) return;
     const history = chatLog.map((m) => ({ role: m.role, content: m.text }));
 
+    const q = text.toLowerCase();
+    const isTrade    = /trade|swap|offer|deal|pick up|drop|sell|buy|acquire/i.test(q);
+    const isStartSit = /start|sit|lineup|flex|who should i|bench/i.test(q);
+    const isNews     = /news|injury|injur|report|update|espn|hurt|status/i.test(q);
+    const isPicks    = /pick|draft pick|round|2026|2027|dynasty/i.test(q);
+    const isMatchup  = /matchup|opponent|facing|this week|projec/i.test(q);
+
+    const fmtPlayer = (p: Player) =>
+      `  - ${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''}${typeof p.proj === 'number' ? ` — proj ${p.proj.toFixed(1)}` : ''}`;
+
     let context = '';
-    if (selectedUser) {
-      context += `Selected manager: ${selectedUser.displayName} (Week ${week})\n`;
-    }
+
+    // Always include own roster
+    if (selectedUser) context += `Your team: ${selectedUser.displayName} (Week ${week}, Season ${season})\n`;
     if (roster) {
-      const fmt = (p: Player) =>
-        `  - ${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''}` +
-        (typeof p.proj === 'number' ? ` — proj ${p.proj.toFixed(1)}` : '');
-      if (roster.starters?.length) {
-        context += `Starters:\n${roster.starters.map(fmt).join('\n')}\n`;
-      }
-      if (roster.bench?.length) {
-        context += `Bench:\n${roster.bench.map(fmt).join('\n')}\n`;
-      }
-      if (roster.taxi?.length) {
-        context += `Taxi:\n${roster.taxi.map(fmt).join('\n')}\n`;
-      }
-      if (roster.picks?.length) {
-        context += `Draft picks owned:\n${roster.picks
-          .map((p) => {
-            const src = p.traded
-              ? ` (via ${p.originalOwnerName ?? p.originalOwner ?? '?'})`
-              : ' (own)';
-            return `  - ${p.season} Round ${p.round}${src}`;
-          })
-          .join('\n')}\n`;
-      } else {
-        context += `Draft picks owned: none\n`;
+      if (roster.starters?.length) context += `Starters:\n${roster.starters.map(fmtPlayer).join('\n')}\n`;
+      if (roster.bench?.length)    context += `Bench:\n${roster.bench.map(fmtPlayer).join('\n')}\n`;
+      if (roster.taxi?.length)     context += `Taxi:\n${roster.taxi.map(fmtPlayer).join('\n')}\n`;
+    }
+
+    // Picks — always include (small) or when relevant
+    if (roster?.picks?.length) {
+      context += `Your draft picks:\n${roster.picks.map(p => {
+        const src = p.traded ? ` (via ${p.originalOwnerName ?? p.originalOwner ?? '?'})` : ' (own)';
+        return `  - ${p.season} Round ${p.round}${src}`;
+      }).join('\n')}\n`;
+    } else {
+      context += `Your draft picks: none\n`;
+    }
+
+    // Trade / matchup / picks — include full league rosters
+    if (isTrade || isPicks || isMatchup) {
+      if (allRosters.length > 0) {
+        context += `\n--- ALL LEAGUE ROSTERS ---\n`;
+        const fmtP = (p: { pos: string; name: string; team: string; proj: number }) =>
+          `${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''} ${p.proj.toFixed(1)}pts`;
+        for (const team of allRosters) {
+          const isMe = team.userId === selectedUser?.userId;
+          context += `\n${team.displayName}${isMe ? ' (YOU)' : ''}:\n`;
+          if (team.starters.length) context += `  Starters: ${team.starters.map(fmtP).join(' | ')}\n`;
+          if (team.bench.length)    context += `  Bench: ${team.bench.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+          if (team.taxi.length)     context += `  Taxi: ${team.taxi.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+        }
       }
     }
 
-    // Add all other teams' rosters so AI knows the full league
-    if (allRosters.length > 0) {
-      context += `\n--- ALL LEAGUE ROSTERS (Week ${week} projections) ---\n`;
-      for (const team of allRosters) {
-        const isMe = team.userId === selectedUser?.userId;
-        context += `\n${team.displayName}${isMe ? ' (YOU)' : ''}:\n`;
-        const fmtP = (p: { pos: string; name: string; team: string; proj: number }) =>
-          `  ${p.pos} ${p.name}${p.team ? ` (${p.team})` : ''} — proj ${p.proj.toFixed(1)}`;
-        if (team.starters.length) {
-          context += `  Starters: ${team.starters.map(fmtP).join(' | ')}\n`;
+    // Start/sit — emphasize projections (already in own roster above, enough)
+
+    // News / injury — fetch ESPN data
+    if (isNews) {
+      try {
+        const [injRes, newsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/espn/injuries`),
+          fetch(`${API_BASE}/api/espn/news`),
+        ]);
+        if (injRes.ok) {
+          const inj: Record<string, string> = await injRes.json();
+          const relevant = Object.entries(inj)
+            .filter(([name]) => q.includes(name.split(' ').pop()?.toLowerCase() ?? ''))
+            .slice(0, 20);
+          const all = relevant.length ? relevant : Object.entries(inj).slice(0, 30);
+          context += `\n--- ESPN INJURY REPORT ---\n${all.map(([n, s]) => `  ${n}: ${s}`).join('\n')}\n`;
         }
-        if (team.bench.length) {
-          context += `  Bench: ${team.bench.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
+        if (newsRes.ok) {
+          const news: { headline: string; description: string; published: string }[] = await newsRes.json();
+          context += `\n--- ESPN NFL NEWS (latest) ---\n${news.slice(0, 8).map(a => `  • ${a.headline}`).join('\n')}\n`;
         }
-        if (team.taxi.length) {
-          context += `  Taxi: ${team.taxi.map(p => `${p.pos} ${p.name}`).join(', ')}\n`;
-        }
-      }
+      } catch { /* ignore, best-effort */ }
     }
 
     setChatLog((prev) => [...prev, { role: 'user', text }]);
