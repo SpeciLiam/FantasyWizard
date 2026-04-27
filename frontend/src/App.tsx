@@ -237,6 +237,7 @@ const TypingDots: React.FC = () => (
 
 export default function App() {
   const [tab, setTab] = useState<'roster' | 'matchups'>('roster');
+  const [mobileSection, setMobileSection] = useState<'league' | 'team' | 'advisor'>('team');
   const [provider, setProvider] = useState<FantasyProvider>('sleeper');
   const [yahooStatus, setYahooStatus] = useState<{
     configured: boolean;
@@ -691,6 +692,11 @@ export default function App() {
   };
   const sendChat = () => sendChatWith(chatInput.trim());
 
+  const chooseUser = (user: LeagueUser) => {
+    setSelectedUser(user);
+    if (window.innerWidth <= 820) setMobileSection('team');
+  };
+
   const connectYahoo = async () => {
     const authWindow = window.open('', '_blank');
     try {
@@ -863,9 +869,29 @@ export default function App() {
             matchups
           </button>
         </div>
+        <div className="mobile-section-tabs" aria-label="Mobile sections">
+          <button
+            className={`mobile-section-tab ${mobileSection === 'league' ? 'active' : ''}`}
+            onClick={() => setMobileSection('league')}
+          >
+            league
+          </button>
+          <button
+            className={`mobile-section-tab ${mobileSection === 'team' ? 'active' : ''}`}
+            onClick={() => setMobileSection('team')}
+          >
+            team
+          </button>
+          <button
+            className={`mobile-section-tab ${mobileSection === 'advisor' ? 'active' : ''}`}
+            onClick={() => setMobileSection('advisor')}
+          >
+            advisor
+          </button>
+        </div>
       </div>
 
-      <div className="board">
+      <div className={`board mobile-${mobileSection}`}>
         {/* LEFT */}
         <div className="col-left">
           <div className="search">
@@ -916,7 +942,7 @@ export default function App() {
                   className={`member ${
                     selectedUser?.userId === u.userId ? 'active' : ''
                   }`}
-                  onClick={() => setSelectedUser(u)}
+                  onClick={() => chooseUser(u)}
                 >
                   <div className={`rank ${isTop ? 'top' : ''}`}>{rank ?? '—'}</div>
                   <Avatar name={u.displayName} size="sm" />

@@ -70,6 +70,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   display: flex; align-items: center; gap: 6px;
   padding: 6px 20px;
 }
+.mobile-section-tabs {
+  display: none;
+}
 .brand {
   font-size: 15px; font-weight: 800;
   letter-spacing: -.01em;
@@ -360,6 +363,24 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 .pill-tab.active { background: var(--accent); color: #fff; }
 .pill-tab:hover:not(.active) { color: var(--fg2); background: var(--surface2); }
+.mobile-section-tab {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg3);
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.mobile-section-tab.active {
+  background: linear-gradient(135deg, var(--accent), rgba(63,207,142,.88));
+  border-color: rgba(255,255,255,.16);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(91,127,255,.20);
+}
 
 /* ── 3-col board ── */
 .board {
@@ -1235,10 +1256,30 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
     flex: 1;
   }
 
+  .mobile-section-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 8px 12px 10px;
+    border-top: 1px solid rgba(255,255,255,.04);
+    background:
+      radial-gradient(circle at 50% 0%, rgba(91,127,255,.12), transparent 45%),
+      var(--bg);
+  }
+
   .board {
     display: flex;
     flex-direction: column;
     min-height: auto;
+  }
+
+  .board.mobile-league .col-center,
+  .board.mobile-league .col-right,
+  .board.mobile-team .col-left,
+  .board.mobile-team .col-right,
+  .board.mobile-advisor .col-left,
+  .board.mobile-advisor .col-center {
+    display: none;
   }
 
   .col-left,
